@@ -80,4 +80,6 @@ fn big_table() {
     let output = templates.render_template("big-table", ctx);
 
     println!("{output}");
+
+    // panic!();
 }

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::engine::render_nodes;
+use crate::engine::{ContextStack, render_nodes};
 use crate::nodes::Node;
 use crate::parser::parse_template;
 
@@ -70,7 +70,8 @@ impl Templates {
 
     pub fn render_template(&self, path: &str, ctx: HashMap<String, Value>) -> String {
         if let Some(nodes) = self.get(path) {
-            render_nodes(nodes, &ctx, self, None)
+            let mut ctx_stack = ContextStack::new(&ctx);
+            render_nodes(nodes, &mut ctx_stack, self, None)
         } else {
             format!("<!-- Missing template: {} -->", path)
         }
