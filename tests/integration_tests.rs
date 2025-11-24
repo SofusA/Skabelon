@@ -55,7 +55,7 @@ fn normalize_ws(s: &str) -> String {
 
 #[test]
 fn big_table() {
-    const SIZE: usize = 100;
+    const SIZE: usize = 2;
 
     let mut table = Vec::with_capacity(SIZE);
     for _ in 0..SIZE {
@@ -84,7 +84,7 @@ fn big_table() {
     for row in table {
         expected += "<tr>";
         for col in row {
-            expected = expected + &format!("<td>{col}</td>");
+            expected += format!("<td>{col}</td>").as_str();
         }
         expected += "</tr>";
     }

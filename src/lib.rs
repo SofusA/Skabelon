@@ -11,12 +11,7 @@ mod tests {
 
     #[test]
     fn test() {
-        let template_str = r#"
-        <h1>Hello</h1>
-        @if(show) {<p>Visible!</p>}
-        @if(false) {<p>Hidden!</p>}
-        @for(item in items) {<span>{{item}}</span>}
-    "#;
+        let template_str = "<h1>Hello</h1>@if(show) {<p>Visible!</p>}@if(false) {<p>Hidden!</p>}@for(item in items) {<span>{{item}}</span>}";
 
         let mut templates = Templates::new();
         templates.load_str("test", template_str);
@@ -27,12 +22,7 @@ mod tests {
 
         let output = templates.render_template("test", ctx);
 
-        println!("{output}");
-
-        let expected = r#"
-        <h1>Hello</h1>
-        <p>Visible!</p><span>A</span><span>B</span><span>C</span>
-    "#;
+        let expected = "<h1>Hello</h1><p>Visible!</p><span>A</span><span>B</span><span>C</span>";
 
         assert_eq!(output, expected);
     }
@@ -51,31 +41,72 @@ mod tests {
 
         let output = templates.render_template("test", ctx);
 
-        println!("{output}");
-
         let expected = "1 true hello";
 
         assert_eq!(output, expected);
     }
 
-    // #[test]
-    // fn objects_are_parsed() {
-    //     let template_str = "{{object['value']}}";
+    #[test]
+    fn objects_are_parsed() {
+        let template_str = "{{object1[\"value\"]}} {{object2.number}}";
 
-    //     let mut templates = Templates::new();
-    //     templates.load_str("test", template_str);
+        let mut templates = Templates::new();
+        templates.load_str("test", template_str);
 
-    //     let mut ctx = HashMap::new();
-    //     ctx.insert("object".to_string(), json!({"value": "hello"}));
+        let mut ctx = HashMap::new();
+        ctx.insert("object1".to_string(), json!({"value": "hello"}));
+        ctx.insert("object2".to_string(), json!({"number": 1}));
 
-    //     let output = templates.render_template("test", ctx);
+        let output = templates.render_template("test", ctx);
 
-    //     println!("{output}");
+        let expected = "hello 1";
 
-    //     let expected = "hello";
+        assert_eq!(output, expected);
+    }
 
-    //     assert_eq!(output, expected);
-    // }
+    #[test]
+    fn eq_are_parsed() {
+        let template_str = "{{object[\"value\"] == \"hello\"}}";
+
+        let mut templates = Templates::new();
+        templates.load_str("test", template_str);
+
+        let mut ctx = HashMap::new();
+        ctx.insert("object".to_string(), json!({"value": "hello"}));
+
+        let output = templates.render_template("test", ctx);
+
+        let expected = "true";
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_rhai_expressions() {
+        let template = "@if(1 + 2 == 3) {OK} {{ 10 * 2 }}";
+        let mut templates = Templates::new();
+        templates.load_str("expr", template);
+
+        let ctx = HashMap::new();
+        let output = templates.render_template("expr", ctx);
+
+        assert_eq!(output.trim(), "OK20");
+    }
+
+    #[test]
+    fn partial_with_rhai_context() {
+        let parent = "@include(partial; value=1+2, name=\"foo\") {Hello}";
+        let partial = "{{value}} {{name}} @content";
+
+        let mut templates = Templates::new();
+        templates.load_str("parent", parent);
+        templates.load_str("partial", partial);
+
+        let ctx = HashMap::new();
+        let output = templates.render_template("parent", ctx);
+
+        assert_eq!(output.trim(), "3 foo Hello");
+    }
 
     #[test]
     fn partial() {
@@ -89,8 +120,6 @@ mod tests {
         let ctx = HashMap::new();
         let output = templates.render_template("parent", ctx);
 
-        println!("{output}");
-
         let expected = "<div>Hello World</div>";
 
         assert_eq!(output, expected);
@@ -99,7 +128,7 @@ mod tests {
     #[test]
     fn partial_separated_context() {
         let parent =
-            "{{value}}{{parent_value}} @include(partial; value='hello') {Hello {{parent_value}}}";
+            "{{value}}{{parent_value}} @include(partial; value=\"hello\") {Hello {{parent_value}}}";
         let partial = "{{value}} @content{{parent_value}}";
 
         let mut templates = Templates::new();
@@ -111,8 +140,6 @@ mod tests {
 
         let output = templates.render_template("parent", ctx);
 
-        println!("{output}");
-
         let expected = "World hello Hello World";
 
         assert_eq!(output, expected);
@@ -120,7 +147,7 @@ mod tests {
 
     #[test]
     fn partial_with_context() {
-        let parent = "@include(partial; partial_var='partial') {<span>{{parent_var}}</span>}";
+        let parent = "@include(partial; partial_var=\"partial\") {<span>{{parent_var}}</span>}";
         let partial = "<div>{{partial_var}} @content</div>";
 
         let mut templates = Templates::new();
@@ -132,8 +159,6 @@ mod tests {
         ctx.insert("partial_var".to_string(), json!("partial"));
 
         let output = templates.render_template("parent", ctx);
-
-        println!("{output}");
 
         let expected = "<div>partial <span>parent</span></div>";
 
