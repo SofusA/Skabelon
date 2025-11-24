@@ -55,7 +55,7 @@ fn normalize_ws(s: &str) -> String {
 
 #[test]
 fn big_table() {
-    const SIZE: usize = 2;
+    const SIZE: usize = 100;
 
     let mut table = Vec::with_capacity(SIZE);
     for _ in 0..SIZE {

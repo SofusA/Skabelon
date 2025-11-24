@@ -6,6 +6,7 @@ pub(crate) enum Node {
     If(If),
     Include(Include),
     ContentPlaceholder,
+    Script(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]

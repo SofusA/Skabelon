@@ -1,5 +1,5 @@
 use crate::{nodes::Node, templates::Templates};
-use rhai::{Array, Dynamic, Engine, Scope};
+use rhai::{Array, Dynamic, Engine, Module, Scope};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -35,14 +35,18 @@ pub(crate) fn render_nodes(
     nodes: &[Node],
     ctx_stack: &mut ContextStack,
     templates: &Templates,
-    content_html: Option<&str>, // NEW: pre-rendered @content HTML
+    content_html: Option<&str>,
+    engine: &mut Engine,
 ) -> String {
     let mut out = String::new();
-    let engine = Engine::new();
 
     for n in nodes {
         match n {
             Node::Text(s) => out.push_str(s),
+
+            Node::Script(_code) => {
+                // No-op: scripts are precompiled and registered before rendering
+            }
 
             Node::VariableBlock(expr) => {
                 let mut scope = create_scope(ctx_stack);
@@ -58,13 +62,25 @@ pub(crate) fn render_nodes(
                     if let Ok(cond) = engine.eval_with_scope::<bool>(&mut scope, expr)
                         && cond
                     {
-                        out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
+                        out.push_str(&render_nodes(
+                            body,
+                            ctx_stack,
+                            templates,
+                            content_html,
+                            engine,
+                        ));
                         rendered = true;
                         break;
                     }
                 }
                 if !rendered && let Some(body) = &if_block.otherwise {
-                    out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
+                    out.push_str(&render_nodes(
+                        body,
+                        ctx_stack,
+                        templates,
+                        content_html,
+                        engine,
+                    ));
                 }
             }
 
@@ -79,6 +95,7 @@ pub(crate) fn render_nodes(
                             ctx_stack,
                             templates,
                             content_html,
+                            engine,
                         ));
                     }
                     ctx_stack.pop_scope();
@@ -87,8 +104,25 @@ pub(crate) fn render_nodes(
 
             Node::Include(include) => {
                 if let Some(partial_nodes) = templates.get(&include.path) {
+                    // Register included template’s scripts before rendering
+                    if let Some(asts) = templates
+                        .script_asts
+                        .get(&crate::templates::normalize_key(&include.path))
+                    {
+                        for ast in asts {
+                            let module = {
+                                let eng_ref: &Engine = &*engine;
+                                match Module::eval_ast_as_new(Scope::new(), ast, eng_ref) {
+                                    Ok(m) => m,
+                                    Err(_e) => continue,
+                                }
+                            };
+                            engine.register_global_module(module.into());
+                        }
+                    }
+
                     let parent_rendered_content =
-                        render_nodes(&include.body, ctx_stack, templates, None);
+                        render_nodes(&include.body, ctx_stack, templates, None, engine);
 
                     let empty_global: HashMap<String, Value> = HashMap::new();
                     let mut partial_stack = ContextStack::new(&empty_global);
@@ -106,6 +140,7 @@ pub(crate) fn render_nodes(
                         &mut partial_stack,
                         templates,
                         Some(&parent_rendered_content),
+                        engine,
                     );
                     out.push_str(&rendered);
                     partial_stack.pop_scope();

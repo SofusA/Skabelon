@@ -20,6 +20,13 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_script(&mut self) -> Node {
+        self.pos += "@script".len();
+        self.expect_char('{');
+        let body = self.read_until_unbalanced('}', '{');
+        Node::Script(body)
+    }
+
     fn parse_include(&mut self) -> Node {
         self.pos += "@include(".len();
         let inner = self.read_until_unbalanced(')', '(');
@@ -45,23 +52,30 @@ impl<'a> Parser<'a> {
             if let Some(end) = end_on
                 && self.peek_char() == Some(end)
             {
-                // Flush any pending text before consuming the end char
                 if !text_buf.is_empty() {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
                     text_buf.clear();
                 }
-                self.pos += 1; // consume the closing brace
+                self.pos += 1;
                 break;
             }
 
-            // Variable {{ ... }}
             if self.starts_with("{{") {
-                // flush text
                 if !text_buf.is_empty() {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
                     text_buf.clear();
                 }
                 nodes.push(Node::VariableBlock(self.parse_variable()));
+                continue;
+            }
+
+            // NEW: @script{ ... }
+            if self.starts_with("@script{") {
+                if !text_buf.is_empty() {
+                    push_text_with_content_placeholders(&mut nodes, &text_buf);
+                    text_buf.clear();
+                }
+                nodes.push(self.parse_script());
                 continue;
             }
 
@@ -74,7 +88,6 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            // Directives: @if(...) { ... } | @else { ... } | @for(...) { ... }
             if self.starts_with("@if(") {
                 if !text_buf.is_empty() {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
@@ -98,14 +111,11 @@ impl<'a> Parser<'a> {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
                     text_buf.clear();
                 }
-                // @else must be handled by parse_if() (it consumes it after body)
-                // If we reach here, treat it as plain text to be resilient
                 text_buf.push_str("@else");
                 self.pos += "@else".len();
                 continue;
             }
 
-            // Otherwise: accumulate one char of text
             text_buf.push(self.chars[self.pos]);
             self.pos += 1;
         }
