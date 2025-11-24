@@ -1,11 +1,11 @@
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
+use std::time::Instant;
 use template::templates::Templates;
 
 #[test]
 fn integration_render_with_glob_and_relative_keys() {
-    // Create temp dir with templates
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().join("templates");
     let partials = base.join("partials");
@@ -66,20 +66,29 @@ fn big_table() {
         table.push(inner);
     }
 
-    let template_str = r#"
-    <table>
-        @for(row in table) {<tr>@for(col in row) {<td>{{col}}</td>}</tr>}
-    </table>
-    "#;
+    let template_str =
+        "<table>@for(row in table) {<tr>@for(col in row) {<td>{{col}}</td>}</tr>}</table>";
     let mut templates = Templates::new();
     templates.load_str("big-table", template_str);
 
     let mut ctx = HashMap::new();
     ctx.insert("table".to_string(), json!(table));
 
+    let timer = Instant::now();
     let output = templates.render_template("big-table", ctx);
 
-    println!("{output}");
+    let elapsed = timer.elapsed();
+    println!("elapsed micros: {}", elapsed.subsec_micros());
 
-    // panic!();
+    let mut expected = "<table>".to_string();
+    for row in table {
+        expected += "<tr>";
+        for col in row {
+            expected = expected + &format!("<td>{col}</td>");
+        }
+        expected += "</tr>";
+    }
+    expected += "</table>";
+
+    assert_eq!(output, expected);
 }
