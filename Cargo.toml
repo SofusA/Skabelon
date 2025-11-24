@@ -9,7 +9,6 @@ serde = "*"
 serde_json = "*"
 glob = "*"
 pathdiff = "*"
-rhai = "*"
 
 [dev-dependencies]
 tempfile = "*"

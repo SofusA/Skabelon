@@ -84,7 +84,7 @@ fn big_table() {
     for row in table {
         expected += "<tr>";
         for col in row {
-            expected += format!("<td>{col}</td>").as_str();
+            expected = expected + &format!("<td>{col}</td>");
         }
         expected += "</tr>";
     }

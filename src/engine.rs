@@ -1,5 +1,7 @@
-use crate::{nodes::Node, templates::Templates};
-use rhai::{Array, Dynamic, Engine, Module, Scope};
+use crate::{
+    nodes::{ForLoop, If, Include, Node},
+    templates::Templates,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -29,14 +31,29 @@ impl<'a> ContextStack<'a> {
             scope.insert(key, value);
         }
     }
+
+    pub(crate) fn get(&self, key: &str) -> Option<&serde_json::Value> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(val) = scope.get(key) {
+                return Some(val);
+            }
+        }
+        self.global.get(key)
+    }
+
+    pub fn get_array_owned(&self, key: &str) -> Option<Vec<serde_json::Value>> {
+        match self.get(key) {
+            Some(serde_json::Value::Array(a)) => Some(a.clone()),
+            _ => None,
+        }
+    }
 }
 
 pub(crate) fn render_nodes(
     nodes: &[Node],
     ctx_stack: &mut ContextStack,
     templates: &Templates,
-    content_html: Option<&str>,
-    engine: &mut Engine,
+    content_html: Option<&str>, // NEW: pre-rendered @content HTML
 ) -> String {
     let mut out = String::new();
 
@@ -44,106 +61,73 @@ pub(crate) fn render_nodes(
         match n {
             Node::Text(s) => out.push_str(s),
 
-            Node::Script(_code) => {
-                // No-op: scripts are precompiled and registered before rendering
-            }
-
-            Node::VariableBlock(expr) => {
-                let mut scope = create_scope(ctx_stack);
-                if let Ok(val) = engine.eval_with_scope::<Dynamic>(&mut scope, expr) {
-                    out.push_str(&val.to_string());
+            Node::VariableBlock(var) => {
+                if let Some(val) = ctx_stack.get(var) {
+                    out.push_str(&value_to_string(val));
                 }
             }
 
-            Node::If(if_block) => {
+            Node::If(If {
+                conditions,
+                otherwise,
+            }) => {
                 let mut rendered = false;
-                for (expr, body) in &if_block.conditions {
-                    let mut scope = create_scope(ctx_stack);
-                    if let Ok(cond) = engine.eval_with_scope::<bool>(&mut scope, expr)
-                        && cond
-                    {
-                        out.push_str(&render_nodes(
-                            body,
-                            ctx_stack,
-                            templates,
-                            content_html,
-                            engine,
-                        ));
+                for (expr, body) in conditions {
+                    if evaluate_condition(expr, ctx_stack) {
+                        out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                         rendered = true;
                         break;
                     }
                 }
-                if !rendered && let Some(body) = &if_block.otherwise {
-                    out.push_str(&render_nodes(
-                        body,
-                        ctx_stack,
-                        templates,
-                        content_html,
-                        engine,
-                    ));
+                if !rendered && let Some(body) = otherwise {
+                    out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                 }
             }
 
-            Node::Forloop(forloop) => {
-                let mut scope = create_scope(ctx_stack);
-                if let Ok(arr) = engine.eval_with_scope::<Array>(&mut scope, &forloop.container) {
+            Node::Forloop(ForLoop {
+                value,
+                container,
+                body,
+            }) => {
+                if let Some(arr) = ctx_stack.get_array_owned(container) {
                     ctx_stack.push_scope();
                     for item in arr {
-                        ctx_stack.set(forloop.value.clone(), dynamic_to_json(item));
-                        out.push_str(&render_nodes(
-                            &forloop.body,
-                            ctx_stack,
-                            templates,
-                            content_html,
-                            engine,
-                        ));
+                        ctx_stack.set(value.clone(), item);
+                        out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                     }
                     ctx_stack.pop_scope();
                 }
             }
 
-            Node::Include(include) => {
-                if let Some(partial_nodes) = templates.get(&include.path) {
-                    // Register included template’s scripts before rendering
-                    if let Some(asts) = templates
-                        .script_asts
-                        .get(&crate::templates::normalize_key(&include.path))
-                    {
-                        for ast in asts {
-                            let module = {
-                                let eng_ref: &Engine = &*engine;
-                                match Module::eval_ast_as_new(Scope::new(), ast, eng_ref) {
-                                    Ok(m) => m,
-                                    Err(_e) => continue,
-                                }
-                            };
-                            engine.register_global_module(module.into());
-                        }
-                    }
+            Node::Include(Include {
+                path,
+                body,
+                local_ctx,
+            }) => {
+                if let Some(partial_nodes) = templates.get(path) {
+                    // 1) Pre-render @content with the *parent* context
+                    let parent_rendered_content = render_nodes(body, ctx_stack, templates, None);
 
-                    let parent_rendered_content =
-                        render_nodes(&include.body, ctx_stack, templates, None, engine);
-
+                    // 2) Build an *isolated* context for the partial (no parent access)
                     let empty_global: HashMap<String, Value> = HashMap::new();
                     let mut partial_stack = ContextStack::new(&empty_global);
                     partial_stack.push_scope();
-
-                    for (k, raw_expr) in &include.local_ctx {
-                        let mut scope = create_scope(ctx_stack);
-                        if let Ok(val) = engine.eval_with_scope::<Dynamic>(&mut scope, raw_expr) {
-                            partial_stack.set(k.clone(), dynamic_to_json(val));
-                        }
+                    for (k, v) in local_ctx {
+                        partial_stack.set(k.clone(), v.clone());
                     }
 
+                    // 3) Render partial; placeholders resolve to the pre-rendered string
                     let rendered = render_nodes(
                         partial_nodes,
                         &mut partial_stack,
                         templates,
                         Some(&parent_rendered_content),
-                        engine,
                     );
                     out.push_str(&rendered);
+
                     partial_stack.pop_scope();
+                } else {
+                    out.push_str(&format!("<!-- Missing include: {} -->", path));
                 }
             }
 
@@ -151,6 +135,7 @@ pub(crate) fn render_nodes(
                 if let Some(html) = content_html {
                     out.push_str(html);
                 }
+                // If no content provided, render nothing
             }
         }
     }
@@ -158,62 +143,50 @@ pub(crate) fn render_nodes(
     out
 }
 
-fn create_scope<'a>(ctx_stack: &'a ContextStack) -> Scope<'a> {
-    let mut scope = Scope::new();
-    for (k, v) in ctx_stack.global {
-        scope.push_dynamic(k.clone(), json_to_dynamic(v));
-    }
-    for scope_map in ctx_stack.scopes.iter() {
-        for (k, v) in scope_map {
-            scope.push_dynamic(k.clone(), json_to_dynamic(v));
-        }
-    }
-    scope
-}
-
-fn json_to_dynamic(v: &Value) -> Dynamic {
-    match v {
-        Value::Array(arr) => {
-            let mut rhai_arr = Array::new();
-            for item in arr {
-                rhai_arr.push(json_to_dynamic(item));
-            }
-            Dynamic::from(rhai_arr)
-        }
-        Value::Object(map) => {
-            let mut rhai_map = rhai::Map::new();
-            for (k, v) in map {
-                rhai_map.insert(k.into(), json_to_dynamic(v));
-            }
-            Dynamic::from(rhai_map)
-        }
-        Value::String(s) => Dynamic::from(s.clone()),
-        Value::Bool(b) => Dynamic::from(*b),
-        Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Dynamic::from(i)
-            } else if let Some(f) = n.as_f64() {
-                Dynamic::from(f)
+fn evaluate_condition(expr: &str, ctx_stack: &ContextStack) -> bool {
+    let e = expr.trim();
+    match e {
+        "true" => true,
+        "false" => false,
+        _ => {
+            if let Some(v) = ctx_stack.get(e) {
+                match v {
+                    Value::Bool(b) => *b,
+                    Value::Number(n) => {
+                        if let Some(i) = n.as_i64() {
+                            i != 0
+                        } else if let Some(u) = n.as_u64() {
+                            u != 0
+                        } else if let Some(f) = n.as_f64() {
+                            f != 0.0
+                        } else {
+                            false
+                        }
+                    }
+                    Value::String(s) => !s.is_empty(),
+                    Value::Null => false,
+                    Value::Array(a) => !a.is_empty(),
+                    Value::Object(o) => !o.is_empty(),
+                }
             } else {
-                Dynamic::UNIT
+                false
             }
         }
-        _ => Dynamic::UNIT,
     }
 }
 
-fn dynamic_to_json(d: Dynamic) -> Value {
-    if d.is::<String>() {
-        Value::String(d.cast::<String>())
-    } else if d.is::<bool>() {
-        Value::Bool(d.cast::<bool>())
-    } else if d.is::<i64>() {
-        Value::Number(d.cast::<i64>().into())
-    } else if d.is::<f64>() {
-        serde_json::json!(d.cast::<f64>())
-    } else if d.is::<Array>() {
-        Value::Array(d.cast::<Array>().into_iter().map(dynamic_to_json).collect())
-    } else {
-        Value::Null
+fn value_to_string(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        Value::Bool(b) => {
+            if *b {
+                "true".into()
+            } else {
+                "false".into()
+            }
+        }
+        Value::Number(n) => n.to_string(),
+        Value::Null => "".into(),
+        other => other.to_string(), // arrays/objects fallback
     }
 }

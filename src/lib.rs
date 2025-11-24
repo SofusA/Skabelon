@@ -66,7 +66,7 @@ mod tests {
 
     #[test]
     fn eq_are_parsed() {
-        let template_str = "{{object[\"value\"] == \"hello\"}}";
+        let template_str = "@if(object[\"value\"] == \"hello\") {true}";
 
         let mut templates = Templates::new();
         templates.load_str("test", template_str);
@@ -79,33 +79,6 @@ mod tests {
         let expected = "true";
 
         assert_eq!(output, expected);
-    }
-
-    #[test]
-    fn test_rhai_expressions() {
-        let template = "@if(1 + 2 == 3) {OK} {{ 10 * 2 }}";
-        let mut templates = Templates::new();
-        templates.load_str("expr", template);
-
-        let ctx = HashMap::new();
-        let output = templates.render_template("expr", ctx);
-
-        assert_eq!(output.trim(), "OK20");
-    }
-
-    #[test]
-    fn partial_with_rhai_context() {
-        let parent = "@include(partial; value=1+2, name=\"foo\") {Hello}";
-        let partial = "{{value}} {{name}} @content";
-
-        let mut templates = Templates::new();
-        templates.load_str("parent", parent);
-        templates.load_str("partial", partial);
-
-        let ctx = HashMap::new();
-        let output = templates.render_template("parent", ctx);
-
-        assert_eq!(output.trim(), "3 foo Hello");
     }
 
     #[test]
@@ -128,7 +101,7 @@ mod tests {
     #[test]
     fn partial_separated_context() {
         let parent =
-            "{{value}}{{parent_value}} @include(partial; value=\"hello\") {Hello {{parent_value}}}";
+            "{{value}}{{parent_value}} @include(partial; value='hello') {Hello {{parent_value}}}";
         let partial = "{{value}} @content{{parent_value}}";
 
         let mut templates = Templates::new();
