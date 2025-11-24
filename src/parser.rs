@@ -22,10 +22,22 @@ impl<'a> Parser<'a> {
 
     fn parse_include(&mut self) -> Node {
         self.pos += "@include(".len();
-        let path = self.read_until_unbalanced(')', '(').trim().to_string();
+        let inner = self.read_until_unbalanced(')', '(');
+        let mut parts = inner.splitn(2, ';').map(|s| s.trim());
+        let path = parts.next().unwrap_or("").to_string();
+        let local_ctx = parts
+            .next()
+            .map(parse_kv_pairs_to_values)
+            .unwrap_or_default();
+
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
-        Node::Include(Include { path, body })
+
+        Node::Include(Include {
+            path,
+            body,
+            local_ctx,
+        })
     }
 
     fn parse_nodes(&mut self, end_on: Option<char>) -> Vec<Node> {
@@ -248,5 +260,43 @@ fn push_text_with_content_placeholders(nodes: &mut Vec<Node>, text: &str) {
     }
     if start < text.len() {
         nodes.push(Node::Text(text[start..].to_string()));
+    }
+}
+
+fn parse_kv_pairs_to_values(s: &str) -> Vec<(String, serde_json::Value)> {
+    s.split(',')
+        .filter_map(|pair| {
+            let mut kv = pair.splitn(2, '=').map(|x| x.trim());
+            let k = kv.next()?;
+            let v = kv.next()?;
+            let val = parse_literal_to_value(v);
+            Some((k.to_string(), val))
+        })
+        .collect()
+}
+
+fn parse_literal_to_value(raw: &str) -> serde_json::Value {
+    let t = raw.trim();
+    // quoted string
+    if (t.starts_with('\'') && t.ends_with('\'')) || (t.starts_with('"') && t.ends_with('"')) {
+        let inner = &t[1..t.len() - 1];
+        serde_json::Value::String(inner.to_string())
+    } else {
+        // booleans / null / numbers
+        match t {
+            "true" => serde_json::Value::Bool(true),
+            "false" => serde_json::Value::Bool(false),
+            "null" => serde_json::Value::Null,
+            _ => {
+                if let Ok(i) = t.parse::<i64>() {
+                    serde_json::Value::Number(i.into())
+                } else if let Ok(f) = t.parse::<f64>() {
+                    serde_json::json!(f)
+                } else {
+                    // fallback: raw string
+                    serde_json::Value::String(t.to_string())
+                }
+            }
+        }
     }
 }

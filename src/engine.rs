@@ -1,4 +1,7 @@
-use crate::{nodes::Node, templates::Templates};
+use crate::{
+    nodes::{ForLoop, If, Include, Node},
+    templates::Templates,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -37,81 +40,106 @@ impl<'a> ContextStack<'a> {
         }
         self.global.get(key)
     }
+
+    pub fn get_array_owned(&self, key: &str) -> Option<Vec<serde_json::Value>> {
+        match self.get(key) {
+            Some(serde_json::Value::Array(a)) => Some(a.clone()),
+            _ => None,
+        }
+    }
 }
 
 pub(crate) fn render_nodes(
     nodes: &[Node],
     ctx_stack: &mut ContextStack,
     templates: &Templates,
-    content_body: Option<&[Node]>,
+    content_html: Option<&str>, // NEW: pre-rendered @content HTML
 ) -> String {
     let mut out = String::new();
+
     for n in nodes {
         match n {
             Node::Text(s) => out.push_str(s),
+
             Node::VariableBlock(var) => {
                 if let Some(val) = ctx_stack.get(var) {
                     out.push_str(&value_to_string(val));
                 }
             }
-            Node::If(if_block) => {
+
+            Node::If(If {
+                conditions,
+                otherwise,
+            }) => {
                 let mut rendered = false;
-                for (expr, body) in &if_block.conditions {
+                for (expr, body) in conditions {
                     if evaluate_condition(expr, ctx_stack) {
-                        out.push_str(&render_nodes(body, ctx_stack, templates, content_body));
+                        out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                         rendered = true;
                         break;
                     }
                 }
-                if !rendered && let Some(body) = &if_block.otherwise {
-                    out.push_str(&render_nodes(body, ctx_stack, templates, content_body));
+                if !rendered && let Some(body) = otherwise {
+                    out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                 }
             }
-            Node::Forloop(forloop) => {
-                // Acquire owned items in a short-lived scope, so the immutable borrow ends
-                let items: Option<Vec<serde_json::Value>> = {
-                    if let Some(serde_json::Value::Array(arr_ref)) =
-                        ctx_stack.get(&forloop.container)
-                    {
-                        Some(arr_ref.clone()) // clone the Vec<Value>
-                    } else {
-                        None
-                    }
-                };
 
-                if let Some(arr) = items {
+            Node::Forloop(ForLoop {
+                value,
+                container,
+                body,
+            }) => {
+                if let Some(arr) = ctx_stack.get_array_owned(container) {
                     ctx_stack.push_scope();
                     for item in arr {
-                        ctx_stack.set(forloop.value.clone(), item);
-                        out.push_str(&render_nodes(
-                            &forloop.body,
-                            ctx_stack,
-                            templates,
-                            content_body,
-                        ));
+                        ctx_stack.set(value.clone(), item);
+                        out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                     }
                     ctx_stack.pop_scope();
                 }
             }
-            Node::Include(include) => {
-                if let Some(partial_nodes) = templates.get(&include.path) {
-                    out.push_str(&render_nodes(
+
+            Node::Include(Include {
+                path,
+                body,
+                local_ctx,
+            }) => {
+                if let Some(partial_nodes) = templates.get(path) {
+                    // 1) Pre-render @content with the *parent* context
+                    let parent_rendered_content = render_nodes(body, ctx_stack, templates, None);
+
+                    // 2) Build an *isolated* context for the partial (no parent access)
+                    let empty_global: HashMap<String, Value> = HashMap::new();
+                    let mut partial_stack = ContextStack::new(&empty_global);
+                    partial_stack.push_scope();
+                    for (k, v) in local_ctx {
+                        partial_stack.set(k.clone(), v.clone());
+                    }
+
+                    // 3) Render partial; placeholders resolve to the pre-rendered string
+                    let rendered = render_nodes(
                         partial_nodes,
-                        ctx_stack,
+                        &mut partial_stack,
                         templates,
-                        Some(&include.body),
-                    ));
+                        Some(&parent_rendered_content),
+                    );
+                    out.push_str(&rendered);
+
+                    partial_stack.pop_scope();
                 } else {
-                    out.push_str(&format!("<!-- Missing include: {} -->", include.path));
+                    out.push_str(&format!("<!-- Missing include: {} -->", path));
                 }
             }
+
             Node::ContentPlaceholder => {
-                if let Some(content_nodes) = content_body {
-                    out.push_str(&render_nodes(content_nodes, ctx_stack, templates, None));
+                if let Some(html) = content_html {
+                    out.push_str(html);
                 }
+                // If no content provided, render nothing
             }
         }
     }
+
     out
 }
 
@@ -123,8 +151,8 @@ fn evaluate_condition(expr: &str, ctx_stack: &ContextStack) -> bool {
         _ => {
             if let Some(v) = ctx_stack.get(e) {
                 match v {
-                    serde_json::Value::Bool(b) => *b,
-                    serde_json::Value::Number(n) => {
+                    Value::Bool(b) => *b,
+                    Value::Number(n) => {
                         if let Some(i) = n.as_i64() {
                             i != 0
                         } else if let Some(u) = n.as_u64() {
@@ -135,10 +163,10 @@ fn evaluate_condition(expr: &str, ctx_stack: &ContextStack) -> bool {
                             false
                         }
                     }
-                    serde_json::Value::String(s) => !s.is_empty(),
-                    serde_json::Value::Null => false,
-                    serde_json::Value::Array(a) => !a.is_empty(),
-                    serde_json::Value::Object(o) => !o.is_empty(),
+                    Value::String(s) => !s.is_empty(),
+                    Value::Null => false,
+                    Value::Array(a) => !a.is_empty(),
+                    Value::Object(o) => !o.is_empty(),
                 }
             } else {
                 false
@@ -149,7 +177,7 @@ fn evaluate_condition(expr: &str, ctx_stack: &ContextStack) -> bool {
 
 fn value_to_string(v: &Value) -> String {
     match v {
-        Value::String(s) => s.clone(), // ✅ no quotes
+        Value::String(s) => s.clone(),
         Value::Bool(b) => {
             if *b {
                 "true".into()

@@ -58,6 +58,25 @@ mod tests {
         assert_eq!(output, expected);
     }
 
+    // #[test]
+    // fn objects_are_parsed() {
+    //     let template_str = "{{object['value']}}";
+
+    //     let mut templates = Templates::new();
+    //     templates.load_str("test", template_str);
+
+    //     let mut ctx = HashMap::new();
+    //     ctx.insert("object".to_string(), json!({"value": "hello"}));
+
+    //     let output = templates.render_template("test", ctx);
+
+    //     println!("{output}");
+
+    //     let expected = "hello";
+
+    //     assert_eq!(output, expected);
+    // }
+
     #[test]
     fn partial() {
         let parent = "@include(partial) {Hello World}";
@@ -78,8 +97,30 @@ mod tests {
     }
 
     #[test]
+    fn partial_separated_context() {
+        let parent =
+            "{{value}}{{parent_value}} @include(partial; value='hello') {Hello {{parent_value}}}";
+        let partial = "{{value}} @content{{parent_value}}";
+
+        let mut templates = Templates::new();
+        templates.load_str("parent", parent);
+        templates.load_str("partial", partial);
+
+        let mut ctx = HashMap::new();
+        ctx.insert("parent_value".to_string(), json!("World"));
+
+        let output = templates.render_template("parent", ctx);
+
+        println!("{output}");
+
+        let expected = "World hello Hello World";
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
     fn partial_with_context() {
-        let parent = "@include(partial) {<span>{{parent_var}}</span>}";
+        let parent = "@include(partial; partial_var='partial') {<span>{{parent_var}}</span>}";
         let partial = "<div>{{partial_var}} @content</div>";
 
         let mut templates = Templates::new();

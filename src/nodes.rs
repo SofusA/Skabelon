@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Node {
     Text(String),
@@ -25,4 +27,5 @@ pub(crate) struct If {
 pub(crate) struct Include {
     pub path: String,
     pub body: Vec<Node>,
+    pub local_ctx: Vec<(String, Value)>,
 }
