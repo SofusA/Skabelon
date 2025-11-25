@@ -19,7 +19,7 @@ pub(crate) struct ForLoop {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct If {
-    pub conditions: Vec<(String, Vec<Node>)>,
+    pub conditions: Vec<(Vec<String>, Vec<Node>)>,
     pub otherwise: Option<Vec<Node>>,
 }
 

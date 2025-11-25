@@ -134,6 +134,7 @@ impl<'a> Parser<'a> {
     fn parse_if(&mut self) -> Node {
         self.pos += "@if(".len();
         let expr = self.read_until_unbalanced(')', '(');
+        let path = parse_variable_path(expr.trim());
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
 
@@ -148,7 +149,7 @@ impl<'a> Parser<'a> {
         }
 
         Node::If(If {
-            conditions: vec![(expr.trim().to_string(), body)],
+            conditions: vec![(path, body)],
             otherwise,
         })
     }

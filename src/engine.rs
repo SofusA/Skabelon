@@ -72,8 +72,8 @@ pub(crate) fn render_nodes(
                 otherwise,
             }) => {
                 let mut rendered = false;
-                for (expr, body) in conditions {
-                    if evaluate_condition(expr, ctx_stack) {
+                for (path, body) in conditions {
+                    if evaluate_condition(path, ctx_stack) {
                         out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                         rendered = true;
                         break;
@@ -141,35 +141,28 @@ pub(crate) fn render_nodes(
     out
 }
 
-fn evaluate_condition(expr: &str, ctx_stack: &ContextStack) -> bool {
-    let e = expr.trim();
-    match e {
-        "true" => true,
-        "false" => false,
-        _ => {
-            if let Some(v) = ctx_stack.get(e) {
-                match v {
-                    Value::Bool(b) => *b,
-                    Value::Number(n) => {
-                        if let Some(i) = n.as_i64() {
-                            i != 0
-                        } else if let Some(u) = n.as_u64() {
-                            u != 0
-                        } else if let Some(f) = n.as_f64() {
-                            f != 0.0
-                        } else {
-                            false
-                        }
-                    }
-                    Value::String(s) => !s.is_empty(),
-                    Value::Null => false,
-                    Value::Array(a) => !a.is_empty(),
-                    Value::Object(o) => !o.is_empty(),
+fn evaluate_condition(path: &[String], ctx_stack: &ContextStack) -> bool {
+    if let Some(val) = resolve_path(path, ctx_stack) {
+        match val {
+            Value::Bool(b) => *b,
+            Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    i != 0
+                } else if let Some(u) = n.as_u64() {
+                    u != 0
+                } else if let Some(f) = n.as_f64() {
+                    f != 0.0
+                } else {
+                    false
                 }
-            } else {
-                false
             }
+            Value::String(s) => !s.is_empty(),
+            Value::Null => false,
+            Value::Array(a) => !a.is_empty(),
+            Value::Object(o) => !o.is_empty(),
         }
+    } else {
+        false
     }
 }
 

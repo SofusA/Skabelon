@@ -108,6 +108,38 @@ mod tests {
     }
 
     #[test]
+    fn none_objects_values_are_false() {
+        let template = "@if(object[\"value\"]) {Hello World}";
+
+        let mut templates = Templates::new();
+        templates.load_str("template", template);
+
+        let mut ctx = HashMap::new();
+        ctx.insert("object".to_string(), json!({"value": None::<String>}));
+        let output = templates.render_template("template", ctx);
+
+        let expected = "";
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn objects_values_are_truthy() {
+        let template = "@if(object[\"value\"]) {{{object[\"value\"}}}";
+
+        let mut templates = Templates::new();
+        templates.load_str("template", template);
+
+        let mut ctx = HashMap::new();
+        ctx.insert("object".to_string(), json!({"value": Some("Hello world")}));
+        let output = templates.render_template("template", ctx);
+
+        let expected = "Hello world";
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
     fn partial_separated_context() {
         let parent =
             "{{value}}{{parent_value}} @include(partial; value='hello') {Hello {{parent_value}}}";
