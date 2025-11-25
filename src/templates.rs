@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use serde_json::Value;
 
@@ -7,10 +7,9 @@ use crate::engine::{ContextStack, render_nodes};
 use crate::nodes::Node;
 use crate::parser::parse_template;
 
-/// Stores parsed templates by a *relative key* like `partials/card.html`
 #[derive(Default)]
 pub struct Templates {
-    templates: HashMap<String, Vec<Node>>, // relative_key -> nodes
+    templates: HashMap<String, Vec<Node>>,
     glob: Option<String>,
 }
 
@@ -83,7 +82,7 @@ impl Templates {
 fn strip_base(base_dir: &str, absolute_path: &str) -> String {
     let base = std::fs::canonicalize(base_dir).unwrap_or_else(|_| PathBuf::from(base_dir));
     let abs = std::fs::canonicalize(absolute_path).unwrap_or_else(|_| PathBuf::from(absolute_path));
-    let rel = pathdiff::diff_paths(&abs, &base).unwrap_or_else(|| PathBuf::from(absolute_path));
+    let rel = diff_paths(&abs, &base).unwrap_or_else(|| PathBuf::from(absolute_path));
 
     normalize_key(rel.to_string_lossy().as_ref())
 }
@@ -110,5 +109,43 @@ fn derive_base_dir(pattern: &str) -> String {
             .unwrap_or_else(|| std::path::Path::new("."))
             .to_string_lossy()
             .to_string()
+    }
+}
+
+pub fn diff_paths(path: &Path, base: &Path) -> Option<PathBuf> {
+    if path.is_absolute() != base.is_absolute() {
+        if path.is_absolute() {
+            Some(PathBuf::from(path))
+        } else {
+            None
+        }
+    } else {
+        let mut it_a = path.components();
+        let mut it_b = base.components();
+        let mut comps: Vec<Component> = vec![];
+        loop {
+            match (it_a.next(), it_b.next()) {
+                (None, None) => break,
+                (Some(a), None) => {
+                    comps.push(a);
+                    comps.extend(it_a.by_ref());
+                    break;
+                }
+                (None, _) => comps.push(Component::ParentDir),
+                (Some(a), Some(b)) if comps.is_empty() && a == b => (),
+                (Some(a), Some(Component::CurDir)) => comps.push(a),
+                (Some(_), Some(Component::ParentDir)) => return None,
+                (Some(a), Some(_)) => {
+                    comps.push(Component::ParentDir);
+                    for _ in it_b {
+                        comps.push(Component::ParentDir);
+                    }
+                    comps.push(a);
+                    comps.extend(it_a.by_ref());
+                    break;
+                }
+            }
+        }
+        Some(comps.iter().map(|c| c.as_os_str()).collect())
     }
 }
