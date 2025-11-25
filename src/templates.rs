@@ -11,8 +11,6 @@ use crate::parser::parse_template;
 #[derive(Default)]
 pub struct Templates {
     templates: HashMap<String, Vec<Node>>, // relative_key -> nodes
-    /// Optional: map relative_key -> absolute file path (useful for debugging or reloading)
-    sources: HashMap<String, String>,
     glob: Option<String>,
 }
 
@@ -34,13 +32,6 @@ impl Templates {
         let nodes = parse_template(&content);
         let key = normalize_key(relative_key);
         self.templates.insert(key.clone(), nodes);
-        self.sources.insert(key, absolute_path.to_string());
-    }
-
-    /// Load a file and derive its relative key by stripping a base dir
-    fn load_under_base(&mut self, base_dir: &str, absolute_path: &str) {
-        let rel = strip_base(base_dir, absolute_path);
-        self.load_as(absolute_path, &rel);
     }
 
     /// Load using a glob, stripping the base directory from all matches.
@@ -57,7 +48,10 @@ impl Templates {
             match entry {
                 Ok(pathbuf) => {
                     let abs = pathbuf.to_string_lossy().to_string();
-                    self.load_under_base(&base_dir, &abs);
+                    {
+                        let rel = strip_base(&base_dir, &abs);
+                        self.load_as(&abs, &rel);
+                    };
                 }
                 Err(e) => {
                     eprintln!("Glob error: {}", e);
@@ -70,7 +64,6 @@ impl Templates {
         let nodes = parse_template(content);
         let rel_key = normalize_key(key);
         self.templates.insert(rel_key.clone(), nodes);
-        self.sources.insert(rel_key, "<in-memory>".to_string());
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<&Vec<Node>> {
