@@ -142,20 +142,23 @@ pub fn render_nodes(
 }
 
 fn evaluate_condition(path: &[String], ctx_stack: &ContextStack) -> bool {
+    if path.len() == 1 {
+        let raw = &path[0];
+        match raw.as_str() {
+            "true" => return true,
+            "false" => return false,
+            _ => {
+                if let Ok(num) = raw.parse::<f64>() {
+                    return num != 0.0;
+                }
+            }
+        }
+    }
+
     if let Some(val) = resolve_path(path, ctx_stack) {
         match val {
             Value::Bool(b) => *b,
-            Value::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    i != 0
-                } else if let Some(u) = n.as_u64() {
-                    u != 0
-                } else if let Some(f) = n.as_f64() {
-                    f != 0.0
-                } else {
-                    false
-                }
-            }
+            Value::Number(n) => n.as_f64().map_or(false, |f| f != 0.0),
             Value::String(s) => !s.is_empty(),
             Value::Null => false,
             Value::Array(a) => !a.is_empty(),

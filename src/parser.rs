@@ -30,8 +30,13 @@ impl<'a> Parser<'a> {
             .map(parse_kv_pairs_to_values)
             .unwrap_or_default();
 
-        self.expect_char('{');
-        let body = self.parse_nodes(Some('}'));
+        self.skip_ws();
+        let body = if self.peek_char() == Some('{') {
+            self.pos += 1; // consume '{'
+            self.parse_nodes(Some('}'))
+        } else {
+            Vec::new() // no block provided
+        };
 
         Node::Include(Include {
             path,

@@ -142,6 +142,40 @@ mod tests {
 
     #[test]
     fn partial() {
+        let parent = "@include(partial) {} @if(true) {<span>World</span>}";
+        let partial = "<span>Hello</span>";
+
+        let mut templates = Templates::new();
+        templates.load_str("parent", parent);
+        templates.load_str("partial", partial);
+
+        let ctx = HashMap::new();
+        let output = templates.render_template("parent", ctx);
+
+        let expected = "<span>Hello</span> <span>World</span>";
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn partial_no_block() {
+        let parent = "@include(partial) @if(true) {<span>World</span>}";
+        let partial = "<span>Hello</span>";
+
+        let mut templates = Templates::new();
+        templates.load_str("parent", parent);
+        templates.load_str("partial", partial);
+
+        let ctx = HashMap::new();
+        let output = templates.render_template("parent", ctx);
+
+        let expected = "<span>Hello</span><span>World</span>";
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn partial_block() {
         let parent = "@include(partial) {Hello World}";
         let partial = "<div>@content</div>";
 
