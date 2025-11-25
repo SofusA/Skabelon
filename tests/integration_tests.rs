@@ -1,76 +1,26 @@
 use serde_json::json;
 use skabelon::Templates;
 use std::collections::HashMap;
-use std::fs;
 use std::time::Instant;
 
+mod syntax;
+
 #[test]
-fn integration_render_with_glob_and_relative_keys() {
-    let dir = tempfile::tempdir().unwrap();
-    let base = dir.path().join("templates");
-    let partials = base.join("partials");
-    std::fs::create_dir_all(&partials).unwrap();
-
-    let main_path = base.join("main.html");
-    let partial_path = partials.join("card.html");
-
-    fs::write(
-        &main_path,
-        r#"
-        <h1>{{title}}</h1>
-        @include(partials/card.html) {<p>{{body}}</p>}
-    "#,
-    )
-    .unwrap();
-
-    fs::write(
-        &partial_path,
-        r#"
-        <div>@content</div>
-    "#,
-    )
-    .unwrap();
+fn test() {
+    let template_str = "<h1>Hello</h1>@if(show) {<p>Visible!</p>}@if(false) {<p>Hidden!</p>}@for(item in items) {<span>{{item}}</span>}";
 
     let mut templates = Templates::new();
-    templates.load_glob(&format!("{}/**/*.html", base.to_str().unwrap()));
+    templates.load_str("test", template_str);
+
     let mut ctx = HashMap::new();
-    ctx.insert("title".to_string(), json!("Hello World"));
-    ctx.insert("body".to_string(), json!("This is body"));
+    ctx.insert("show".to_string(), json!(true));
+    ctx.insert("items".to_string(), json!(["A", "B", "C"]));
 
-    let output = templates.render_template("main.html", ctx);
-    let expected = r#"
-        <h1>Hello World</h1>
-        <div><p>This is body</p></div>
-    "#;
+    let output = templates.render_template("test", ctx);
 
-    assert_eq!(normalize_ws(&output), normalize_ws(expected));
-}
+    let expected = "<h1>Hello</h1><p>Visible!</p><span>A</span><span>B</span><span>C</span>";
 
-#[test]
-fn reload_glob() {
-    let dir = tempfile::tempdir().unwrap();
-    let base = dir.path().join("templates");
-    std::fs::create_dir_all(&base).unwrap();
-    let main_path = base.join("main.html");
-    fs::write(&main_path, "hello").unwrap();
-    let mut templates = Templates::new();
-
-    templates.load_glob(&format!("{}/**/*.html", base.to_str().unwrap()));
-
-    let output = templates.render_template("main.html", Default::default());
-    let expected = "hello";
-    assert_eq!(normalize_ws(&output), normalize_ws(expected));
-
-    fs::write(&main_path, "world").unwrap();
-    templates.reload();
-    let output = templates.render_template("main.html", Default::default());
-
-    let expected = "world";
-    assert_eq!(normalize_ws(&output), normalize_ws(expected));
-}
-
-fn normalize_ws(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
+    assert_eq!(output, expected);
 }
 
 #[test]
