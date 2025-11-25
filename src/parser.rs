@@ -303,7 +303,13 @@ fn parse_variable_path(expr: &str) -> Vec<String> {
                     in_brackets = false;
                 }
             }
-            '"' | '\'' => continue, // ignore quotes
+            '"' | '\'' => continue,
+            '.' if !in_brackets => {
+                if !current.is_empty() {
+                    parts.push(current.clone());
+                    current.clear();
+                }
+            }
             _ => current.push(c),
         }
     }
