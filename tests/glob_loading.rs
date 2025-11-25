@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 
 #[test]
-fn integration_render_with_glob_and_relative_keys() {
+fn render_with_glob_and_relative_keys() {
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().join("templates");
     let partials = base.join("partials");

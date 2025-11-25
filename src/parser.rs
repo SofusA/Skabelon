@@ -21,7 +21,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_include(&mut self) -> Node {
-        self.pos += "@include(".len();
+        self.pos += "@include".len();
+
+        self.skip_ws();
+        self.expect_char('(');
+
         let inner = self.read_until_unbalanced(')', '(');
         let mut parts = inner.splitn(2, ';').map(|s| s.trim());
         let path = parts.next().unwrap_or("").to_string();
@@ -30,12 +34,13 @@ impl<'a> Parser<'a> {
             .map(parse_kv_pairs_to_values)
             .unwrap_or_default();
 
+        // Optional block `{ ... }`
         self.skip_ws();
         let body = if self.peek_char() == Some('{') {
             self.pos += 1; // consume '{'
             self.parse_nodes(Some('}'))
         } else {
-            Vec::new() // no block provided
+            Vec::new()
         };
 
         Node::Include(Include {
@@ -70,7 +75,7 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            if self.starts_with("@include(") {
+            if self.starts_with("@include") {
                 if !text_buf.is_empty() {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
                     text_buf.clear();
@@ -79,7 +84,7 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            if self.starts_with("@if(") {
+            if self.starts_with("@if") {
                 if !text_buf.is_empty() {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
                     text_buf.clear();
@@ -88,7 +93,7 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            if self.starts_with("@for(") {
+            if self.starts_with("@for") {
                 if !text_buf.is_empty() {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
                     text_buf.clear();
@@ -137,40 +142,54 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if(&mut self) -> Node {
-        let mut conditions = Vec::new();
+        self.pos += "@if".len();
 
-        // Parse initial @if
-        self.pos += "@if(".len();
+        self.skip_ws();
+        self.expect_char('(');
+
         let expr = self.read_until_unbalanced(')', '(');
         let path = parse_variable_path(expr.trim());
+
+        self.skip_ws();
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
-        conditions.push((path, body));
 
-        // Parse any @else if blocks
+        let mut conditions = Vec::new();
+        conditions.push((path, body));
+        let mut otherwise: Option<Vec<Node>> = None;
+
         loop {
             self.skip_ws();
-            if self.starts_with("@else if(") {
-                self.pos += "@else if(".len();
-                let expr = self.read_until_unbalanced(')', '(');
-                let path = parse_variable_path(expr.trim());
-                self.expect_char('{');
-                let body = self.parse_nodes(Some('}'));
-                conditions.push((path, body));
+
+            if self.starts_with("@else") {
+                self.pos += "@else".len();
+                self.skip_ws();
+
+                if self.starts_with("if") {
+                    // '@else if (...) { ... }'
+                    self.pos += "if".len();
+                    self.skip_ws();
+                    self.expect_char('(');
+                    let expr = self.read_until_unbalanced(')', '(');
+                    let path = parse_variable_path(expr.trim());
+
+                    self.skip_ws();
+                    self.expect_char('{');
+                    let body = self.parse_nodes(Some('}'));
+
+                    conditions.push((path, body));
+                    continue;
+                } else {
+                    // '@else { ... }'
+                    self.skip_ws();
+                    self.expect_char('{');
+                    let else_body = self.parse_nodes(Some('}'));
+                    otherwise = Some(else_body);
+                    break;
+                }
             } else {
                 break;
             }
-        }
-
-        // Parse optional @else block
-        self.skip_ws();
-        let mut otherwise = None;
-        if self.starts_with("@else") {
-            self.pos += "@else".len();
-            self.skip_ws();
-            self.expect_char('{');
-            let else_body = self.parse_nodes(Some('}'));
-            otherwise = Some(else_body);
         }
 
         Node::If(If {
@@ -180,11 +199,15 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_for(&mut self) -> Node {
-        self.pos += "@for(".len();
-        let for_expr = self.read_until_unbalanced(')', '(');
+        self.pos += "@for".len();
 
+        self.skip_ws();
+        self.expect_char('(');
+
+        let for_expr = self.read_until_unbalanced(')', '(');
         let (value, container) = parse_for_expression(&for_expr);
 
+        self.skip_ws();
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
 
@@ -308,7 +331,7 @@ fn parse_literal_to_value(raw: &str) -> serde_json::Value {
     }
 }
 
-fn parse_variable_path(expr: &str) -> Vec<String> {
+pub fn parse_variable_path(expr: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut in_brackets = false;
