@@ -158,7 +158,7 @@ fn evaluate_condition(path: &[String], ctx_stack: &ContextStack) -> bool {
     if let Some(val) = resolve_path(path, ctx_stack) {
         match val {
             Value::Bool(b) => *b,
-            Value::Number(n) => n.as_f64().map_or(false, |f| f != 0.0),
+            Value::Number(n) => n.as_f64().is_some_and(|f| f != 0.0),
             Value::String(s) => !s.is_empty(),
             Value::Null => false,
             Value::Array(a) => !a.is_empty(),

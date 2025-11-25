@@ -164,6 +164,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "skabelon"
+version = "0.1.2"
+dependencies = [
+ "glob",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.111"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -185,16 +195,6 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys",
-]
-
-[[package]]
-name = "template"
-version = "0.1.0"
-dependencies = [
- "glob",
- "serde",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]
