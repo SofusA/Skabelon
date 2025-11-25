@@ -25,7 +25,7 @@ fn render_with_glob_and_relative_keys() {
     fs::write(
         &partial_path,
         r#"
-        <div>@content</div>
+        <div><content-slot></div>
     "#,
     )
     .unwrap();

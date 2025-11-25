@@ -1,6 +1,6 @@
 [package]
 name = "skabelon"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 description = "Simple templating engine for rust using angular syntax"
 license = "GPL-3.0"

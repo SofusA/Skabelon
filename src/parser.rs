@@ -283,12 +283,12 @@ fn parse_for_expression(expr: &str) -> (String, String) {
 
 fn push_text_with_content_placeholders(nodes: &mut Vec<Node>, text: &str) {
     let mut start = 0;
-    for (idx, _) in text.match_indices("@content") {
+    for (idx, _) in text.match_indices("<content-slot>") {
         if idx > start {
             nodes.push(Node::Text(text[start..idx].to_string()));
         }
         nodes.push(Node::ContentPlaceholder);
-        start = idx + "@content".len();
+        start = idx + "<content-slot>".len();
     }
     if start < text.len() {
         nodes.push(Node::Text(text[start..].to_string()));

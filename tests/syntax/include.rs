@@ -40,7 +40,7 @@ fn partial_no_block() {
 #[test]
 fn partial_block() {
     let parent = "@include(partial) {Hello World}";
-    let partial = "<div>@content</div>";
+    let partial = "<div><content-slot></div>";
 
     let mut templates = Templates::new();
     templates.load_str("parent", parent);
@@ -58,7 +58,7 @@ fn partial_block() {
 fn partial_separated_context() {
     let parent =
         "{{value}}{{parent_value}} @include(partial; value='hello') {Hello {{parent_value}}}";
-    let partial = "{{value}} @content{{parent_value}}";
+    let partial = "{{value}} <content-slot>{{parent_value}}";
 
     let mut templates = Templates::new();
     templates.load_str("parent", parent);
@@ -77,7 +77,7 @@ fn partial_separated_context() {
 #[test]
 fn partial_with_context() {
     let parent = "@include(partial; partial_var=\"partial\") {<span>{{parent_var}}</span>}";
-    let partial = "<div>{{partial_var}} @content</div>";
+    let partial = "<div>{{partial_var}} <content-slot></div>";
 
     let mut templates = Templates::new();
     templates.load_str("parent", parent);

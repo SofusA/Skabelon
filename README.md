@@ -11,7 +11,7 @@ Uses angular syntax, so you will be able to use the build in angular parser from
 - Templates are parsed at runtime. Templates can be recalculated with `templates.reload()`.
 - `@if() {} @else if() {} @else {}` support.
 - `@for() {}` support for iteration.
-- `@include {}` support for partials. Partials can have a `@content` where block from `@include` will be rendered.
+- `@include {}` support for partials. Partials can have a `<content-slot>` where block from `@include` will be rendered.
 - `object["value"]` or `object.value` for accessing object values
 
 ## Usage
