@@ -11,28 +11,28 @@ pub struct ContextStack<'a> {
 }
 
 impl<'a> ContextStack<'a> {
-    pub(crate) fn new(global: &'a HashMap<String, serde_json::Value>) -> Self {
+    pub fn new(global: &'a HashMap<String, serde_json::Value>) -> Self {
         Self {
             scopes: Vec::new(),
             global,
         }
     }
 
-    pub(crate) fn push_scope(&mut self) {
+    pub fn push_scope(&mut self) {
         self.scopes.push(HashMap::new());
     }
 
-    pub(crate) fn pop_scope(&mut self) {
+    pub fn pop_scope(&mut self) {
         self.scopes.pop();
     }
 
-    pub(crate) fn set(&mut self, key: String, value: serde_json::Value) {
+    pub fn set(&mut self, key: String, value: serde_json::Value) {
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(key, value);
         }
     }
 
-    pub(crate) fn get(&self, key: &str) -> Option<&serde_json::Value> {
+    pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
         for scope in self.scopes.iter().rev() {
             if let Some(val) = scope.get(key) {
                 return Some(val);
@@ -49,7 +49,7 @@ impl<'a> ContextStack<'a> {
     }
 }
 
-pub(crate) fn render_nodes(
+pub fn render_nodes(
     nodes: &[Node],
     ctx_stack: &mut ContextStack,
     templates: &Templates,

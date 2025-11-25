@@ -65,7 +65,7 @@ impl Templates {
         self.templates.insert(rel_key.clone(), nodes);
     }
 
-    pub(crate) fn get(&self, key: &str) -> Option<&Vec<Node>> {
+    pub fn get(&self, key: &str) -> Option<&Vec<Node>> {
         self.templates.get(&normalize_key(key))
     }
 

@@ -1,6 +1,6 @@
 use crate::nodes::{ForLoop, If, Include, Node};
 
-pub(crate) fn parse_template(input: &str) -> Vec<Node> {
+pub fn parse_template(input: &str) -> Vec<Node> {
     let mut p = Parser::new(input);
     p.parse_nodes(None)
 }

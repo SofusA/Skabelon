@@ -1,7 +1,7 @@
 use serde_json::Value;
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Node {
+pub enum Node {
     Text(String),
     VariableBlock(Vec<String>),
     Forloop(ForLoop),
@@ -11,20 +11,20 @@ pub(crate) enum Node {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ForLoop {
+pub struct ForLoop {
     pub value: String,
     pub container: String,
     pub body: Vec<Node>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct If {
+pub struct If {
     pub conditions: Vec<(Vec<String>, Vec<Node>)>,
     pub otherwise: Option<Vec<Node>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Include {
+pub struct Include {
     pub path: String,
     pub body: Vec<Node>,
     pub local_ctx: Vec<(String, Value)>,
