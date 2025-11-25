@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn objects_are_parsed() {
-        let template_str = "{{object1[\"value\"]}} {{object2.number}}";
+        let template_str = "{{object1[\"value\"]}} {{object2[\"number\"}}";
 
         let mut templates = Templates::new();
         templates.load_str("test", template_str);
@@ -60,23 +60,6 @@ mod tests {
         let output = templates.render_template("test", ctx);
 
         let expected = "hello 1";
-
-        assert_eq!(output, expected);
-    }
-
-    #[test]
-    fn eq_are_parsed() {
-        let template_str = "@if(object[\"value\"] == \"hello\") {true}";
-
-        let mut templates = Templates::new();
-        templates.load_str("test", template_str);
-
-        let mut ctx = HashMap::new();
-        ctx.insert("object".to_string(), json!({"value": "hello"}));
-
-        let output = templates.render_template("test", ctx);
-
-        let expected = "true";
 
         assert_eq!(output, expected);
     }

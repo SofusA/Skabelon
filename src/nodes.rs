@@ -3,7 +3,7 @@ use serde_json::Value;
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Node {
     Text(String),
-    VariableBlock(String),
+    VariableBlock(Vec<String>),
     Forloop(ForLoop),
     If(If),
     Include(Include),

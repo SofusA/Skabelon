@@ -48,18 +48,15 @@ impl<'a> Parser<'a> {
             if let Some(end) = end_on
                 && self.peek_char() == Some(end)
             {
-                // Flush any pending text before consuming the end char
                 if !text_buf.is_empty() {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
                     text_buf.clear();
                 }
-                self.pos += 1; // consume the closing brace
+                self.pos += 1;
                 break;
             }
 
-            // Variable {{ ... }}
             if self.starts_with("{{") {
-                // flush text
                 if !text_buf.is_empty() {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
                     text_buf.clear();
@@ -77,7 +74,6 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            // Directives: @if(...) { ... } | @else { ... } | @for(...) { ... }
             if self.starts_with("@if(") {
                 if !text_buf.is_empty() {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
@@ -101,14 +97,12 @@ impl<'a> Parser<'a> {
                     push_text_with_content_placeholders(&mut nodes, &text_buf);
                     text_buf.clear();
                 }
-                // @else must be handled by parse_if() (it consumes it after body)
-                // If we reach here, treat it as plain text to be resilient
+
                 text_buf.push_str("@else");
                 self.pos += "@else".len();
                 continue;
             }
 
-            // Otherwise: accumulate one char of text
             text_buf.push(self.chars[self.pos]);
             self.pos += 1;
         }
@@ -120,31 +114,29 @@ impl<'a> Parser<'a> {
         nodes
     }
 
-    fn parse_variable(&mut self) -> String {
+    fn parse_variable(&mut self) -> Vec<String> {
         debug_assert!(self.starts_with("{{"));
-        self.pos += 2; // consume {{
+        self.pos += 2;
         let start = self.pos;
 
         while !self.eof() {
             if self.starts_with("}}") {
-                let var = self.src[start..self.pos].trim().to_string();
-                self.pos += 2; // consume }}
-                return var;
+                let expr = self.src[start..self.pos].trim();
+                self.pos += 2;
+                return parse_variable_path(expr);
             }
             self.pos += 1;
         }
-        // Unterminated variable; return whatever we have
-        self.src[start..].trim().to_string()
+
+        parse_variable_path(self.src[start..].trim())
     }
 
     fn parse_if(&mut self) -> Node {
-        // consume "@if("
         self.pos += "@if(".len();
         let expr = self.read_until_unbalanced(')', '(');
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
 
-        // optional @else { ... }
         self.skip_ws();
         let mut otherwise = None;
         if self.starts_with("@else") {
@@ -162,10 +154,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_for(&mut self) -> Node {
-        // consume "@for("
         self.pos += "@for(".len();
         let for_expr = self.read_until_unbalanced(')', '(');
-        // Expected form: "item in items"
+
         let (value, container) = parse_for_expression(&for_expr);
 
         self.expect_char('{');
@@ -179,9 +170,6 @@ impl<'a> Parser<'a> {
     }
 
     fn read_until_unbalanced(&mut self, end: char, start_pair: char) -> String {
-        // Read until we meet `end` char at nesting level 0.
-        // For simplicity here, we assume no nested parens inside expr.
-        // We still handle cases where `start_pair` might appear.
         let start_pos = self.pos;
         let mut depth = 0;
 
@@ -193,7 +181,7 @@ impl<'a> Parser<'a> {
             } else if c == end {
                 if depth == 0 {
                     let s = self.src[start_pos..self.pos].to_string();
-                    self.pos += 1; // consume end char
+                    self.pos += 1;
                     return s;
                 } else {
                     depth -= 1;
@@ -201,7 +189,7 @@ impl<'a> Parser<'a> {
             }
             self.pos += 1;
         }
-        // If we reach EOF, return what's left
+
         self.src[start_pos..].to_string()
     }
 
@@ -209,9 +197,6 @@ impl<'a> Parser<'a> {
         self.skip_ws();
         if self.peek_char() == Some(expected) {
             self.pos += 1;
-        } else {
-            // Soft fail: treat missing delimiter as text
-            // to keep parser resilient in prototype.
         }
     }
 
@@ -240,8 +225,6 @@ impl<'a> Parser<'a> {
 }
 
 fn parse_for_expression(expr: &str) -> (String, String) {
-    // Parses "value in container" into (value, container)
-    // Trim and split by "in" (first occurrence).
     let trimmed = expr.trim();
     let mut parts = trimmed.splitn(2, " in ");
     let value = parts.next().unwrap_or("").trim().to_string();
@@ -277,12 +260,11 @@ fn parse_kv_pairs_to_values(s: &str) -> Vec<(String, serde_json::Value)> {
 
 fn parse_literal_to_value(raw: &str) -> serde_json::Value {
     let t = raw.trim();
-    // quoted string
+
     if (t.starts_with('\'') && t.ends_with('\'')) || (t.starts_with('"') && t.ends_with('"')) {
         let inner = &t[1..t.len() - 1];
         serde_json::Value::String(inner.to_string())
     } else {
-        // booleans / null / numbers
         match t {
             "true" => serde_json::Value::Bool(true),
             "false" => serde_json::Value::Bool(false),
@@ -293,10 +275,40 @@ fn parse_literal_to_value(raw: &str) -> serde_json::Value {
                 } else if let Ok(f) = t.parse::<f64>() {
                     serde_json::json!(f)
                 } else {
-                    // fallback: raw string
                     serde_json::Value::String(t.to_string())
                 }
             }
         }
     }
+}
+
+fn parse_variable_path(expr: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut in_brackets = false;
+
+    for c in expr.chars() {
+        match c {
+            '[' => {
+                if !current.is_empty() {
+                    parts.push(current.clone());
+                    current.clear();
+                }
+                in_brackets = true;
+            }
+            ']' => {
+                if in_brackets {
+                    parts.push(current.clone());
+                    current.clear();
+                    in_brackets = false;
+                }
+            }
+            '"' | '\'' => continue, // ignore quotes
+            _ => current.push(c),
+        }
+    }
+    if !current.is_empty() {
+        parts.push(current);
+    }
+    parts
 }

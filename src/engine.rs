@@ -41,9 +41,9 @@ impl<'a> ContextStack<'a> {
         self.global.get(key)
     }
 
-    pub fn get_array_owned(&self, key: &str) -> Option<Vec<serde_json::Value>> {
+    pub fn get_array(&self, key: &str) -> Option<&[Value]> {
         match self.get(key) {
-            Some(serde_json::Value::Array(a)) => Some(a.clone()),
+            Some(Value::Array(a)) => Some(a.as_slice()),
             _ => None,
         }
     }
@@ -53,7 +53,7 @@ pub(crate) fn render_nodes(
     nodes: &[Node],
     ctx_stack: &mut ContextStack,
     templates: &Templates,
-    content_html: Option<&str>, // NEW: pre-rendered @content HTML
+    content_html: Option<&str>,
 ) -> String {
     let mut out = String::new();
 
@@ -61,8 +61,8 @@ pub(crate) fn render_nodes(
         match n {
             Node::Text(s) => out.push_str(s),
 
-            Node::VariableBlock(var) => {
-                if let Some(val) = ctx_stack.get(var) {
+            Node::VariableBlock(path) => {
+                if let Some(val) = resolve_path(path, ctx_stack) {
                     out.push_str(&value_to_string(val));
                 }
             }
@@ -89,7 +89,9 @@ pub(crate) fn render_nodes(
                 container,
                 body,
             }) => {
-                if let Some(arr) = ctx_stack.get_array_owned(container) {
+                if let Some(arr_ref) = ctx_stack.get_array(container) {
+                    let arr: Vec<Value> = arr_ref.to_vec();
+
                     ctx_stack.push_scope();
                     for item in arr {
                         ctx_stack.set(value.clone(), item);
@@ -105,10 +107,8 @@ pub(crate) fn render_nodes(
                 local_ctx,
             }) => {
                 if let Some(partial_nodes) = templates.get(path) {
-                    // 1) Pre-render @content with the *parent* context
                     let parent_rendered_content = render_nodes(body, ctx_stack, templates, None);
 
-                    // 2) Build an *isolated* context for the partial (no parent access)
                     let empty_global: HashMap<String, Value> = HashMap::new();
                     let mut partial_stack = ContextStack::new(&empty_global);
                     partial_stack.push_scope();
@@ -116,7 +116,6 @@ pub(crate) fn render_nodes(
                         partial_stack.set(k.clone(), v.clone());
                     }
 
-                    // 3) Render partial; placeholders resolve to the pre-rendered string
                     let rendered = render_nodes(
                         partial_nodes,
                         &mut partial_stack,
@@ -135,7 +134,6 @@ pub(crate) fn render_nodes(
                 if let Some(html) = content_html {
                     out.push_str(html);
                 }
-                // If no content provided, render nothing
             }
         }
     }
@@ -187,6 +185,21 @@ fn value_to_string(v: &Value) -> String {
         }
         Value::Number(n) => n.to_string(),
         Value::Null => "".into(),
-        other => other.to_string(), // arrays/objects fallback
+        other => other.to_string(),
     }
+}
+
+fn resolve_path<'a>(path: &'a [String], ctx_stack: &'a ContextStack) -> Option<&'a Value> {
+    if path.is_empty() {
+        return None;
+    }
+    let mut value = ctx_stack.get(&path[0])?;
+    for key in &path[1..] {
+        if let Value::Object(map) = value {
+            value = map.get(key)?;
+        } else {
+            return None;
+        }
+    }
+    Some(value)
 }
