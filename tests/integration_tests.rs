@@ -24,6 +24,66 @@ fn test() {
 }
 
 #[test]
+fn whites_space_test() {
+    let template_str = r#"
+<h1>Testing template</h1>
+
+<h2>If statements</h2>
+@if (true) {
+  <span>hello</span>
+}
+"#;
+
+    let expected = r#"
+<h1>Testing template</h1>
+
+<h2>If statements</h2>
+
+  <span>hello</span>
+"#;
+
+    let mut templates = Templates::new();
+    templates.load_str("test", template_str);
+
+    let ctx = HashMap::new();
+    let output = templates.render_template("test", ctx);
+
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn big_test() {
+    let main_template = include_str!("templates/main.html");
+    let partial_1_template = include_str!("templates/partial1.html");
+    let partial_2_template = include_str!("templates/partial2.html");
+    let partial_3_template = include_str!("templates/partial3.html");
+
+    let mut templates = Templates::new();
+    templates.load_str("main.html", main_template);
+    templates.load_str("partial1.html", partial_1_template);
+    templates.load_str("partial2.html", partial_2_template);
+    templates.load_str("partial3.html", partial_3_template);
+
+    let object = json!({"true": true, "false": false, "number": 5, "string": "world", "none": None::<String>, "array": [1, 2, 3]});
+
+    let mut ctx = HashMap::new();
+    ctx.insert("bool_true".to_string(), json!(true));
+    ctx.insert("bool_false".to_string(), json!(false));
+    ctx.insert("array".to_string(), json!(["A", "B", "C"]));
+    ctx.insert("string".to_string(), json!("hello"));
+    ctx.insert("object".to_string(), object);
+
+    let output = templates
+        .render_template("main.html", ctx)
+        .replace("\n", "")
+        .replace("  ", "");
+
+    let expected = include_str!("templates/expected.html").replace("\n", "");
+
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn big_table() {
     const SIZE: usize = 100;
 

@@ -1,5 +1,6 @@
 use crate::{
     nodes::{ForLoop, If, Include, Node},
+    parser::parse_variable_path,
     templates::Templates,
 };
 use serde_json::Value;
@@ -39,13 +40,6 @@ impl<'a> ContextStack<'a> {
             }
         }
         self.global.get(key)
-    }
-
-    pub fn get_array(&self, key: &str) -> Option<&[Value]> {
-        match self.get(key) {
-            Some(Value::Array(a)) => Some(a.as_slice()),
-            _ => None,
-        }
     }
 }
 
@@ -89,11 +83,13 @@ pub fn render_nodes(
                 container,
                 body,
             }) => {
-                if let Some(arr_ref) = ctx_stack.get_array(container) {
-                    let arr: Vec<Value> = arr_ref.to_vec();
-
+                if let Some(items) = {
+                    resolve_path(&parse_variable_path(container), ctx_stack)
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.to_vec())
+                } {
                     ctx_stack.push_scope();
-                    for item in arr {
+                    for item in items {
                         ctx_stack.set(value.clone(), item);
                         out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                     }

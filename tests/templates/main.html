@@ -1,0 +1,83 @@
+<h1>Testing template</h1>
+
+<h2>If statements</h2>
+@if (true) {
+  <span>true works</span>
+}
+@if (bool_true) {
+  <span>true works</span>
+}
+<span>space</span>
+@if (false) {
+  <span>oh no</span>
+}
+
+@if (bool_false) {
+  <span>oh no</span>
+}
+
+@if (false) {
+  <span>oh no</span>
+} @else {
+  <span>else works</span>
+}
+
+@if (false) {
+  <span>oh no</span>
+} @else if (true) {
+  <span>else if works</span>
+}
+
+@if (false) {
+  <span>oh no</span>
+} @else if (false) {
+  <span>oh no</span>
+} @else {
+  <span>else if works 2</span>
+}
+
+@if (false) {
+  <span>oh no</span>
+} @else if (false) {
+  <span>oh no</span>
+}
+
+<h2>For loops</h2>
+@for (item in array) {
+  <span>{{ item }}</span>
+}
+
+<h2>Partials</h2>
+@include (partial1.html) {
+  <span>partial block works</span>
+}
+
+@include (partial2.html) {}
+
+@if (object.true) {
+  @include (partial3.html) {
+    <span>conditional partial works</span>
+  }
+}
+
+@if (object["none"]) {
+  <span>oh no</span>
+}
+
+<h2>Objects</h2>
+<span>{{ string }}</span>
+<span>{{ object.string }}</span>
+<span>{{ object.number }}</span>
+<span>{{ object.true }}</span>
+
+@for (item in object.array) {
+  <span>{{ item }}</span>
+}
+
+@if (object.true) {
+  <span>true object value works</span>
+}
+
+@if (object.false) {
+  <span>oh no</span>
+}
