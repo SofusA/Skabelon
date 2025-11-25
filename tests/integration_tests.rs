@@ -1,8 +1,8 @@
 use serde_json::json;
+use skabelon::Templates;
 use std::collections::HashMap;
 use std::fs;
 use std::time::Instant;
-use template::Templates;
 
 #[test]
 fn integration_render_with_glob_and_relative_keys() {
