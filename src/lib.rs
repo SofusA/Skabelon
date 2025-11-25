@@ -1,7 +1,9 @@
 mod engine;
 mod nodes;
 mod parser;
-pub mod templates;
+mod templates;
+
+pub use templates::Templates;
 
 #[cfg(test)]
 mod tests {

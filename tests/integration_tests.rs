@@ -2,7 +2,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
 use std::time::Instant;
-use template::templates::Templates;
+use template::Templates;
 
 #[test]
 fn integration_render_with_glob_and_relative_keys() {
@@ -32,10 +32,7 @@ fn integration_render_with_glob_and_relative_keys() {
     .unwrap();
 
     let mut templates = Templates::new();
-    templates.load_glob(
-        base.to_str().unwrap(),
-        &format!("{}/**/*.html", base.to_str().unwrap()),
-    );
+    templates.load_glob(&format!("{}/**/*.html", base.to_str().unwrap()));
     let mut ctx = HashMap::new();
     ctx.insert("title".to_string(), json!("Hello World"));
     ctx.insert("body".to_string(), json!("This is body"));
@@ -46,6 +43,29 @@ fn integration_render_with_glob_and_relative_keys() {
         <div><p>This is body</p></div>
     "#;
 
+    assert_eq!(normalize_ws(&output), normalize_ws(expected));
+}
+
+#[test]
+fn reload_glob() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("templates");
+    std::fs::create_dir_all(&base).unwrap();
+    let main_path = base.join("main.html");
+    fs::write(&main_path, "hello").unwrap();
+    let mut templates = Templates::new();
+
+    templates.load_glob(&format!("{}/**/*.html", base.to_str().unwrap()));
+
+    let output = templates.render_template("main.html", Default::default());
+    let expected = "hello";
+    assert_eq!(normalize_ws(&output), normalize_ws(expected));
+
+    fs::write(&main_path, "world").unwrap();
+    templates.reload();
+    let output = templates.render_template("main.html", Default::default());
+
+    let expected = "world";
     assert_eq!(normalize_ws(&output), normalize_ws(expected));
 }
 

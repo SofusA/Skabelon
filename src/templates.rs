@@ -8,18 +8,23 @@ use crate::nodes::Node;
 use crate::parser::parse_template;
 
 /// Stores parsed templates by a *relative key* like `partials/card.html`
+#[derive(Default)]
 pub struct Templates {
     templates: HashMap<String, Vec<Node>>, // relative_key -> nodes
     /// Optional: map relative_key -> absolute file path (useful for debugging or reloading)
     sources: HashMap<String, String>,
+    glob: Option<String>,
 }
 
 impl Templates {
     pub fn new() -> Self {
-        Self {
-            templates: HashMap::new(),
-            sources: HashMap::new(),
-        }
+        Self::default()
+    }
+
+    pub fn reload(&mut self) {
+        if let Some(glob) = self.glob.clone() {
+            self.load_glob(&glob);
+        };
     }
 
     /// Load a single file under a specific relative key
@@ -38,17 +43,21 @@ impl Templates {
         self.load_as(absolute_path, &rel);
     }
 
-    /// Load using a glob, stripping the given `base_dir` from all matches.
+    /// Load using a glob, stripping the base directory from all matches.
     ///
     /// Example:
-    ///     templates.load_glob("templates", "templates/**/*.html");
+    ///     templates.load_glob("templates/**/*.html");
     ///     // Keys become like "partials/card.html", "main.html"
-    pub fn load_glob(&mut self, base_dir: &str, pattern: &str) {
+    pub fn load_glob(&mut self, pattern: &str) {
+        self.glob = Some(pattern.into());
+
+        let base_dir = derive_base_dir(pattern);
+
         for entry in glob::glob(pattern).expect("Invalid glob pattern") {
             match entry {
                 Ok(pathbuf) => {
                     let abs = pathbuf.to_string_lossy().to_string();
-                    self.load_under_base(base_dir, &abs);
+                    self.load_under_base(&base_dir, &abs);
                 }
                 Err(e) => {
                     eprintln!("Glob error: {}", e);
@@ -78,12 +87,6 @@ impl Templates {
     }
 }
 
-impl Default for Templates {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 fn strip_base(base_dir: &str, absolute_path: &str) -> String {
     let base = std::fs::canonicalize(base_dir).unwrap_or_else(|_| PathBuf::from(base_dir));
     let abs = std::fs::canonicalize(absolute_path).unwrap_or_else(|_| PathBuf::from(absolute_path));
@@ -98,4 +101,21 @@ fn normalize_key<S: AsRef<str>>(s: S) -> String {
         k = stripped.to_string();
     }
     k
+}
+
+fn derive_base_dir(pattern: &str) -> String {
+    // Find first '*' and take everything before it
+    if let Some(idx) = pattern.find('*') {
+        let base = &pattern[..idx];
+        // Remove trailing slash if present
+        let base = base.trim_end_matches('/');
+        base.to_string()
+    } else {
+        // No wildcard? Use parent directory
+        let path = std::path::Path::new(pattern);
+        path.parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .to_string_lossy()
+            .to_string()
+    }
 }
