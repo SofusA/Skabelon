@@ -132,12 +132,32 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if(&mut self) -> Node {
+        let mut conditions = Vec::new();
+
+        // Parse initial @if
         self.pos += "@if(".len();
         let expr = self.read_until_unbalanced(')', '(');
         let path = parse_variable_path(expr.trim());
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
+        conditions.push((path, body));
 
+        // Parse any @else if blocks
+        loop {
+            self.skip_ws();
+            if self.starts_with("@else if(") {
+                self.pos += "@else if(".len();
+                let expr = self.read_until_unbalanced(')', '(');
+                let path = parse_variable_path(expr.trim());
+                self.expect_char('{');
+                let body = self.parse_nodes(Some('}'));
+                conditions.push((path, body));
+            } else {
+                break;
+            }
+        }
+
+        // Parse optional @else block
         self.skip_ws();
         let mut otherwise = None;
         if self.starts_with("@else") {
@@ -149,7 +169,7 @@ impl<'a> Parser<'a> {
         }
 
         Node::If(If {
-            conditions: vec![(path, body)],
+            conditions,
             otherwise,
         })
     }

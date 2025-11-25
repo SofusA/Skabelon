@@ -6,7 +6,7 @@ pub mod templates;
 #[cfg(test)]
 mod tests {
     use crate::templates::Templates;
-    use serde_json::json;
+    use serde_json::{Value, json};
     use std::collections::HashMap;
 
     #[test]
@@ -41,8 +41,6 @@ mod tests {
             .map(|x| json!({"index": x.0+1, "value": x.1}))
             .collect();
 
-        println!("{:?}", arr);
-
         let mut ctx = HashMap::new();
         ctx.insert("items".to_string(), json!(arr));
 
@@ -51,6 +49,56 @@ mod tests {
         let expected = "<span>1: A</span><span>2: B</span><span>3: C</span>";
 
         assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn if_condition() {
+        let template_str = "@if(value) {hello} @if(other) {world}";
+
+        let mut templates = Templates::new();
+        templates.load_str("template", template_str);
+
+        let mut ctx = HashMap::new();
+        ctx.insert("value".to_string(), Value::Bool(true));
+        ctx.insert("other".to_string(), Value::Bool(false));
+
+        let output = templates.render_template("template", ctx);
+
+        let expected = "hello";
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn if_else() {
+        let template_str = "@if(value) {hello} @else {world}";
+
+        let mut templates = Templates::new();
+        templates.load_str("template", template_str);
+
+        let mut ctx = HashMap::new();
+        ctx.insert("value".to_string(), Value::Bool(false));
+
+        let output = templates.render_template("template", ctx);
+
+        let expected = "world";
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn if_else_if() {
+        let template = "@if(a) {A} @else if(b) {B} @else {C}";
+
+        let mut templates = Templates::new();
+        templates.load_str("template", template);
+
+        let mut ctx = HashMap::new();
+        ctx.insert("a".to_string(), json!(false));
+        ctx.insert("b".to_string(), json!(true));
+
+        let output = templates.render_template("template", ctx);
+        assert_eq!(output, "B");
     }
 
     #[test]
@@ -74,7 +122,7 @@ mod tests {
 
     #[test]
     fn objects_are_parsed() {
-        let template_str = "{{object1[\"value\"]}} {{object2[\"number\"}}";
+        let template_str = "{{object1[\"value\"]}} {{object2.number}}";
 
         let mut templates = Templates::new();
         templates.load_str("test", template_str);
