@@ -1,6 +1,5 @@
 use crate::{
     nodes::{ForLoop, If, Include, Node},
-    parser::parse_variable_path,
     templates::Templates,
 };
 use serde_json::Value;
@@ -83,11 +82,11 @@ pub fn render_nodes(
                 container,
                 body,
             }) => {
-                if let Some(items) = {
-                    resolve_path(&parse_variable_path(container), ctx_stack)
-                        .and_then(|v| v.as_array())
-                        .map(|a| a.to_vec())
-                } {
+                let items_opt = resolve_path(container, ctx_stack)
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.to_vec());
+
+                if let Some(items) = items_opt {
                     ctx_stack.push_scope();
                     for item in items {
                         ctx_stack.set(value.clone(), item);

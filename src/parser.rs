@@ -201,11 +201,14 @@ impl<'a> Parser<'a> {
     fn parse_for(&mut self) -> Node {
         self.pos += "@for".len();
 
+        // Allow optional whitespace before '('
         self.skip_ws();
         self.expect_char('(');
 
         let for_expr = self.read_until_unbalanced(')', '(');
-        let (value, container) = parse_for_expression(&for_expr);
+        let (value, container_str) = parse_for_expression(&for_expr);
+
+        let container = parse_variable_path(container_str.trim());
 
         self.skip_ws();
         self.expect_char('{');
@@ -331,7 +334,7 @@ fn parse_literal_to_value(raw: &str) -> serde_json::Value {
     }
 }
 
-pub fn parse_variable_path(expr: &str) -> Vec<String> {
+fn parse_variable_path(expr: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut in_brackets = false;

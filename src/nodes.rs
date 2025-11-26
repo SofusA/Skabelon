@@ -13,7 +13,7 @@ pub enum Node {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ForLoop {
     pub value: String,
-    pub container: String,
+    pub container: Vec<String>,
     pub body: Vec<Node>,
 }
 
