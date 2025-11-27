@@ -56,7 +56,10 @@ impl<'a> Parser<'a> {
                 && self.peek_char() == Some(end)
             {
                 if !text_buf.is_empty() {
-                    push_text_with_content_placeholders(&mut nodes, &text_buf);
+                    if !text_buf.is_empty() {
+                        nodes.push(Node::Text(text_buf.clone()));
+                    }
+
                     text_buf.clear();
                 }
                 self.pos += 1;
@@ -65,7 +68,9 @@ impl<'a> Parser<'a> {
 
             if self.starts_with("{{") {
                 if !text_buf.is_empty() {
-                    push_text_with_content_placeholders(&mut nodes, &text_buf);
+                    if !text_buf.is_empty() {
+                        nodes.push(Node::Text(text_buf.clone()));
+                    }
                     text_buf.clear();
                 }
                 nodes.push(Node::VariableBlock(self.parse_variable()));
@@ -74,7 +79,9 @@ impl<'a> Parser<'a> {
 
             if self.starts_with("@include") {
                 if !text_buf.is_empty() {
-                    push_text_with_content_placeholders(&mut nodes, &text_buf);
+                    if !text_buf.is_empty() {
+                        nodes.push(Node::Text(text_buf.clone()));
+                    }
                     text_buf.clear();
                 }
                 nodes.push(self.parse_include());
@@ -83,7 +90,9 @@ impl<'a> Parser<'a> {
 
             if self.starts_with("@if") {
                 if !text_buf.is_empty() {
-                    push_text_with_content_placeholders(&mut nodes, &text_buf);
+                    if !text_buf.is_empty() {
+                        nodes.push(Node::Text(text_buf.clone()));
+                    }
                     text_buf.clear();
                 }
                 nodes.push(self.parse_if());
@@ -92,7 +101,9 @@ impl<'a> Parser<'a> {
 
             if self.starts_with("@for") {
                 if !text_buf.is_empty() {
-                    push_text_with_content_placeholders(&mut nodes, &text_buf);
+                    if !text_buf.is_empty() {
+                        nodes.push(Node::Text(text_buf.clone()));
+                    }
                     text_buf.clear();
                 }
                 nodes.push(self.parse_for());
@@ -101,7 +112,9 @@ impl<'a> Parser<'a> {
 
             if self.starts_with("@else") {
                 if !text_buf.is_empty() {
-                    push_text_with_content_placeholders(&mut nodes, &text_buf);
+                    if !text_buf.is_empty() {
+                        nodes.push(Node::Text(text_buf.clone()));
+                    }
                     text_buf.clear();
                 }
 
@@ -114,8 +127,8 @@ impl<'a> Parser<'a> {
             self.pos += 1;
         }
 
-        if !text_buf.is_empty() {
-            push_text_with_content_placeholders(&mut nodes, &text_buf);
+        if !text_buf.is_empty() && !text_buf.is_empty() {
+            nodes.push(Node::Text(text_buf.clone()));
         }
 
         nodes
@@ -130,7 +143,12 @@ impl<'a> Parser<'a> {
             if self.starts_with("}}") {
                 let expr = self.src[start..self.pos].trim();
                 self.pos += 2;
-                return parse_variable_path(expr);
+
+                let trimmed = expr.trim();
+                if trimmed == "content" {
+                    return vec!["__CONTENT__".to_string()];
+                }
+                return parse_variable_path(trimmed);
             }
             self.pos += 1;
         }
@@ -279,20 +297,6 @@ fn parse_for_expression(expr: &str) -> (String, String) {
     let value = parts.next().unwrap_or("").trim().to_string();
     let container = parts.next().unwrap_or("").trim().to_string();
     (value, container)
-}
-
-fn push_text_with_content_placeholders(nodes: &mut Vec<Node>, text: &str) {
-    let mut start = 0;
-    for (idx, _) in text.match_indices("<content-slot>") {
-        if idx > start {
-            nodes.push(Node::Text(text[start..idx].to_string()));
-        }
-        nodes.push(Node::ContentPlaceholder);
-        start = idx + "<content-slot>".len();
-    }
-    if start < text.len() {
-        nodes.push(Node::Text(text[start..].to_string()));
-    }
 }
 
 fn parse_kv_pairs(s: &str) -> Vec<(String, LocalValue)> {

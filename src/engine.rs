@@ -55,7 +55,11 @@ pub fn render_nodes(
             Node::Text(s) => out.push_str(s),
 
             Node::VariableBlock(path) => {
-                if let Some(val) = resolve_path(path, ctx_stack) {
+                if path.len() == 1 && path[0] == "__CONTENT__" {
+                    if let Some(html) = content_html {
+                        out.push_str(html);
+                    }
+                } else if let Some(val) = resolve_path(path, ctx_stack) {
                     out.push_str(&value_to_string(val));
                 }
             }
