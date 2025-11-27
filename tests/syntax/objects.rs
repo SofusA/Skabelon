@@ -10,7 +10,7 @@ fn values_are_parsed() {
 
     let ctx = json!({"number": 1, "bool": true, "string": "hello"});
 
-    let output = templates.render_template("test", ctx);
+    let output = templates.render("test", &ctx);
 
     let expected = "1 true hello";
 
@@ -25,7 +25,7 @@ fn objects_are_parsed() {
     templates.load_str("test", template_str);
 
     let ctx = json!({"object1": {"value": "hello"}, "object2": {"number": 1}});
-    let output = templates.render_template("test", ctx);
+    let output = templates.render("test", &ctx);
 
     let expected = "hello 1";
 
@@ -41,7 +41,7 @@ fn none_objects_values_are_false() {
 
     let ctx = json!({"value": None::<String>});
 
-    let output = templates.render_template("template", ctx);
+    let output = templates.render("template", &ctx);
 
     let expected = "";
 
@@ -56,7 +56,7 @@ fn objects_values_are_truthy() {
     templates.load_str("template", template);
 
     let ctx = json!({"object": {"value": Some("Hello world")}});
-    let output = templates.render_template("template", ctx);
+    let output = templates.render("template", &ctx);
 
     let expected = "Hello world";
 

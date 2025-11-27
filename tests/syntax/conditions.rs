@@ -10,7 +10,7 @@ fn if_condition() {
 
     let ctx = json!({"value": true, "other": false});
 
-    let output = templates.render_template("template", ctx);
+    let output = templates.render("template", &ctx);
 
     let expected = "hello";
 
@@ -26,7 +26,7 @@ fn if_else() {
 
     let ctx = json!({"value": false});
 
-    let output = templates.render_template("template", ctx);
+    let output = templates.render("template", &ctx);
 
     let expected = "world";
 
@@ -42,6 +42,6 @@ fn if_else_if() {
 
     let ctx = json!({"a": false, "b": true});
 
-    let output = templates.render_template("template", ctx);
+    let output = templates.render("template", &ctx);
     assert_eq!(output, "B");
 }

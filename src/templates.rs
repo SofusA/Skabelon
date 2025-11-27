@@ -69,9 +69,9 @@ impl Templates {
         self.templates.get(&normalize_key(key))
     }
 
-    pub fn render_template(&self, path: &str, ctx: Value) -> String {
+    pub fn render(&self, path: &str, ctx: &Value) -> String {
         if let Some(nodes) = self.get(path) {
-            let mut ctx_stack = ContextStack::new(&ctx);
+            let mut ctx_stack = ContextStack::new(ctx);
             render_nodes(nodes, &mut ctx_stack, self, None)
         } else {
             format!("<!-- Missing template: {} -->", path)

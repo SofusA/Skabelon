@@ -17,7 +17,7 @@ fn for_loops() {
 
     let ctx = json!({"items": arr});
 
-    let output = templates.render_template("test", ctx);
+    let output = templates.render("test", &ctx);
 
     let expected = "<span>1: A</span><span>2: B</span><span>3: C</span>";
 

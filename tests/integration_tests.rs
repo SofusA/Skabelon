@@ -13,7 +13,7 @@ fn test() {
 
     let ctx = json!({"show": true, "items": ["A", "B", "C"]});
 
-    let output = templates.render_template("test", ctx);
+    let output = templates.render("test", &ctx);
 
     let expected = "<h1>Hello</h1><p>Visible!</p><span>A</span><span>B</span><span>C</span>";
 
@@ -42,7 +42,7 @@ fn whites_space_test() {
     let mut templates = Templates::new();
     templates.load_str("test", template_str);
 
-    let output = templates.render_template("test", Default::default());
+    let output = templates.render("test", Default::default());
 
     assert_eq!(output, expected);
 }
@@ -65,7 +65,7 @@ fn big_test() {
     let ctx = json!({"bool_true": true,"bool_false": false, "array": ["A", "B", "C"], "string": "hello", "object": object });
 
     let output = templates
-        .render_template("main.html", ctx)
+        .render("main.html", &ctx)
         .replace("\n", "")
         .replace("  ", "");
 
@@ -95,7 +95,7 @@ fn big_table() {
     let ctx = json!({"table": table});
 
     let timer = Instant::now();
-    let output = templates.render_template("big-table", ctx);
+    let output = templates.render("big-table", &ctx);
 
     let elapsed = timer.elapsed();
     println!("elapsed micros: {}", elapsed.subsec_micros());

@@ -33,7 +33,7 @@ fn render_with_glob_and_relative_keys() {
     templates.load_glob(&format!("{}/**/*.html", base.to_str().unwrap()));
     let ctx = json!({"title": "Hello World", "body": "This is body"});
 
-    let output = templates.render_template("main.html", ctx);
+    let output = templates.render("main.html", &ctx);
     let expected = r#"
         <h1>Hello World</h1>
         <div><p>This is body</p></div>
@@ -53,13 +53,13 @@ fn reload_glob() {
 
     templates.load_glob(&format!("{}/**/*.html", base.to_str().unwrap()));
 
-    let output = templates.render_template("main.html", Default::default());
+    let output = templates.render("main.html", Default::default());
     let expected = "hello";
     assert_eq!(normalize_ws(&output), normalize_ws(expected));
 
     fs::write(&main_path, "world").unwrap();
     templates.reload();
-    let output = templates.render_template("main.html", Default::default());
+    let output = templates.render("main.html", Default::default());
 
     let expected = "world";
     assert_eq!(normalize_ws(&output), normalize_ws(expected));
