@@ -1,5 +1,5 @@
 use crate::{
-    nodes::{Condition, ForLoop, If, Include, LocalValue, Node},
+    nodes::{CompareOp, Condition, ForLoop, If, Include, LocalValue, Node, Operand},
     templates::Templates,
 };
 use serde_json::Value;
@@ -55,6 +55,7 @@ pub fn render_nodes(
             Node::Text(s) => out.push_str(s),
 
             Node::VariableBlock(path) => {
+                // Special {{content}} marker support if you added it
                 if path.len() == 1 && path[0] == "__CONTENT__" {
                     if let Some(html) = content_html {
                         out.push_str(html);
@@ -153,22 +154,59 @@ fn evaluate_condition(cond: &Condition, ctx_stack: &ContextStack) -> bool {
     match cond {
         Condition::Literal(b) => *b,
         Condition::Path(path) => evaluate_path_truthiness(path, ctx_stack),
-        Condition::And(conds) => {
-            for c in conds {
-                if !evaluate_condition(c, ctx_stack) {
-                    return false;
-                }
+        Condition::And(conds) => conds.iter().all(|c| evaluate_condition(c, ctx_stack)),
+        Condition::Or(conds) => conds.iter().any(|c| evaluate_condition(c, ctx_stack)),
+        Condition::Not(inner) => !evaluate_condition(inner, ctx_stack), // <-- ADD THIS
+        Condition::Compare { left, op, right } => {
+            let l = resolve_operand(left, ctx_stack);
+            let r = resolve_operand(right, ctx_stack);
+            match (l, r) {
+                (Some(lv), Some(rv)) => compare_values(&lv, op, &rv),
+                _ => false,
             }
-            true
         }
-        Condition::Or(conds) => {
-            for c in conds {
-                if evaluate_condition(c, ctx_stack) {
-                    return true;
-                }
+    }
+}
+
+fn resolve_operand(opnd: &Operand, ctx_stack: &ContextStack) -> Option<Value> {
+    match opnd {
+        Operand::Literal(v) => Some(v.clone()),
+        Operand::Path(p) => resolve_path(p, ctx_stack).cloned(),
+    }
+}
+
+fn compare_values(left: &Value, op: &CompareOp, right: &Value) -> bool {
+    match (left, right) {
+        (Value::String(ls), Value::String(rs)) => match op {
+            CompareOp::Eq => ls == rs,
+            CompareOp::Ne => ls != rs,
+            CompareOp::Lt => ls < rs,
+            CompareOp::Gt => ls > rs,
+            CompareOp::Le => ls <= rs,
+            CompareOp::Ge => ls >= rs,
+        },
+        (Value::Number(ln), Value::Number(rn)) => {
+            let lf = ln.as_f64().unwrap_or(0.0);
+            let rf = rn.as_f64().unwrap_or(0.0);
+            match op {
+                CompareOp::Eq => lf == rf,
+                CompareOp::Ne => lf != rf,
+                CompareOp::Lt => lf < rf,
+                CompareOp::Gt => lf > rf,
+                CompareOp::Le => lf <= rf,
+                CompareOp::Ge => lf >= rf,
             }
-            false
         }
+        (Value::Bool(lb), Value::Bool(rb)) => match op {
+            CompareOp::Eq => lb == rb,
+            CompareOp::Ne => lb != rb,
+            _ => false,
+        },
+        _ => match op {
+            CompareOp::Eq => left == right,
+            CompareOp::Ne => left != right,
+            _ => false, // ordering doesn't make sense for mixed types
+        },
     }
 }
 

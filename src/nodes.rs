@@ -18,11 +18,33 @@ pub struct ForLoop {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum Operand {
+    Path(Vec<String>),
+    Literal(Value),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CompareOp {
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Condition {
+    Literal(bool),
     Path(Vec<String>),
     And(Vec<Condition>),
     Or(Vec<Condition>),
-    Literal(bool),
+    Not(Box<Condition>), // <-- ADD THIS
+    Compare {
+        left: Operand,
+        op: CompareOp,
+        right: Operand,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
