@@ -1,4 +1,6 @@
-use crate::nodes::{Condition, ForLoop, If, Include, LocalValue, Node};
+use serde_json::Value;
+
+use crate::nodes::{CompareOp, Condition, ForLoop, If, Include, LocalValue, Node, Operand};
 
 pub fn parse_template(input: &str) -> Vec<Node> {
     let mut p = Parser::new(input);
@@ -361,13 +363,32 @@ fn parse_variable_path(expr: &str) -> Vec<String> {
     parts
 }
 
+// Token types
 #[derive(Debug, Clone)]
 enum Tok {
     Ident(String),
     And,
     Or,
+    Not,
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
     LParen,
     RParen,
+}
+
+fn parse_unary(cur: &mut Cursor) -> Condition {
+    match cur.peek() {
+        Some(Tok::Not) => {
+            cur.next(); // consume '!'
+            let inner = parse_unary(cur); // right-associative
+            Condition::Not(Box::new(inner))
+        }
+        _ => parse_factor(cur),
+    }
 }
 
 fn tokenize_bool(s: &str) -> Vec<Tok> {
@@ -381,13 +402,15 @@ fn tokenize_bool(s: &str) -> Vec<Tok> {
         let w = cur.trim().to_string();
         cur.clear();
         match w.as_str() {
-            "&&" | "and" => toks.push(Tok::And),
-            "||" | "or" => toks.push(Tok::Or),
+            "and" | "&&" => toks.push(Tok::And),
+            "or" | "||" => toks.push(Tok::Or),
+            "not" => toks.push(Tok::Not),
             _ => toks.push(Tok::Ident(w)),
         }
     };
 
-    for c in s.chars() {
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
         match c {
             '(' => {
                 push_cur(&mut cur, &mut toks);
@@ -397,6 +420,41 @@ fn tokenize_bool(s: &str) -> Vec<Tok> {
                 push_cur(&mut cur, &mut toks);
                 toks.push(Tok::RParen);
             }
+            '=' => {
+                push_cur(&mut cur, &mut toks);
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    toks.push(Tok::Eq);
+                }
+            }
+            '!' => {
+                push_cur(&mut cur, &mut toks);
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    toks.push(Tok::Ne);
+                } else {
+                    toks.push(Tok::Not);
+                }
+            }
+            '<' => {
+                push_cur(&mut cur, &mut toks);
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    toks.push(Tok::Le);
+                } else {
+                    toks.push(Tok::Lt);
+                }
+            }
+            '>' => {
+                push_cur(&mut cur, &mut toks);
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    toks.push(Tok::Ge);
+                } else {
+                    toks.push(Tok::Gt);
+                }
+            }
+
             c if c.is_whitespace() => {
                 push_cur(&mut cur, &mut toks);
             }
@@ -435,36 +493,34 @@ fn parse_bool_expr(s: &str) -> Condition {
 }
 
 fn parse_expr(cur: &mut Cursor) -> Condition {
-    // expr := term ( "or" term )*
     let left = parse_term(cur);
     let mut parts = vec![left];
 
     while let Some(Tok::Or) = cur.peek() {
-        cur.next(); // consume 'or'
+        cur.next();
         let rhs = parse_term(cur);
         parts.push(rhs);
     }
 
     if parts.len() == 1 {
-        parts.into_iter().next().unwrap()
+        parts[0].clone()
     } else {
         Condition::Or(parts)
     }
 }
 
 fn parse_term(cur: &mut Cursor) -> Condition {
-    // term := factor ( "and" factor )*
-    let left = parse_factor(cur);
+    let left = parse_unary(cur);
     let mut parts = vec![left];
 
     while let Some(Tok::And) = cur.peek() {
-        cur.next(); // consume 'and'
-        let rhs = parse_factor(cur);
+        cur.next();
+        let rhs = parse_unary(cur);
         parts.push(rhs);
     }
 
     if parts.len() == 1 {
-        parts.into_iter().next().unwrap()
+        parts[0].clone()
     } else {
         Condition::And(parts)
     }
@@ -475,19 +531,82 @@ fn parse_factor(cur: &mut Cursor) -> Condition {
         Some(Tok::LParen) => {
             cur.next(); // '('
             let inner = parse_expr(cur);
-            match cur.next() {
-                Some(Tok::RParen) => inner,
-                _ => inner, // tolerate missing ')'
+            if let Some(Tok::RParen) = cur.peek() {
+                cur.next(); // ')'
+            }
+            inner
+        }
+        Some(Tok::Ident(_)) => {
+            let left_ident = if let Some(Tok::Ident(s)) = cur.next() {
+                s
+            } else {
+                String::new()
+            };
+            if let Some(op_tok) = cur.peek()
+                && let Some(op) = parse_compare_op(op_tok)
+            {
+                cur.next(); // consume operator
+                let right = parse_operand(cur.next());
+                let left = Operand::Path(parse_variable_path(&left_ident));
+                return Condition::Compare { left, op, right };
+            }
+            Condition::Path(parse_variable_path(&left_ident))
+        }
+        _ => Condition::Literal(false),
+    }
+}
+
+fn parse_operand(tok: Option<Tok>) -> Operand {
+    match tok {
+        Some(Tok::Ident(s)) => {
+            let t = s.as_str();
+            let is_quoted = (t.starts_with('"') && t.ends_with('"'))
+                || (t.starts_with('\'') && t.ends_with('\''));
+            let is_bool = t == "true" || t == "false";
+            let is_int = t.parse::<i64>().is_ok();
+            let is_float = t.parse::<f64>().is_ok();
+
+            if is_quoted || is_bool || is_int || is_float {
+                Operand::Literal(parse_literal(Some(Tok::Ident(s))))
+            } else {
+                Operand::Path(parse_variable_path(&s))
             }
         }
-        Some(Tok::Ident(_)) => match cur.next() {
-            Some(Tok::Ident(s)) => match s.as_str() {
-                "true" => Condition::Literal(true),
-                "false" => Condition::Literal(false),
-                _ => Condition::Path(parse_variable_path(&s)),
-            },
-            _ => Condition::Literal(false),
-        },
-        _ => Condition::Literal(false),
+        other => Operand::Literal(parse_literal(other)),
+    }
+}
+
+fn parse_compare_op(tok: &Tok) -> Option<CompareOp> {
+    match tok {
+        Tok::Eq => Some(CompareOp::Eq),
+        Tok::Ne => Some(CompareOp::Ne),
+        Tok::Lt => Some(CompareOp::Lt),
+        Tok::Gt => Some(CompareOp::Gt),
+        Tok::Le => Some(CompareOp::Le),
+        Tok::Ge => Some(CompareOp::Ge),
+        _ => None,
+    }
+}
+
+fn parse_literal(tok: Option<Tok>) -> Value {
+    match tok {
+        Some(Tok::Ident(s)) => {
+            if s == "true" {
+                Value::Bool(true)
+            } else if s == "false" {
+                Value::Bool(false)
+            } else if let Ok(i) = s.parse::<i64>() {
+                Value::Number(i.into())
+            } else if let Ok(f) = s.parse::<f64>() {
+                serde_json::json!(f)
+            } else if (s.starts_with('"') && s.ends_with('"'))
+                || (s.starts_with('\'') && s.ends_with('\''))
+            {
+                Value::String(s[1..s.len() - 1].to_string())
+            } else {
+                Value::String(s)
+            }
+        }
+        _ => Value::Null,
     }
 }

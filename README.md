@@ -4,8 +4,6 @@ Simple templating engine for rust.
 
 Uses angular syntax, so you will be able to use the build in angular parser from prettier for formatting.
 
-**Note that template logic is not supported**. Calculate logic in your rust files.
-
 ## Features
 - Angular syntax
 - Templates are parsed at runtime. Templates can be recalculated with `templates.reload()`.
@@ -33,6 +31,7 @@ If key is an object, values can be referenced with `{{ key["value"] }}` or `{{ k
 ### `@if`
 
 #### Renders block if condition is true.
+Supports `==`, `!=`, `&&`, `||`, `<`, `>`, `<=`, `>=`,
 
 ```html
 @if (condition) {
