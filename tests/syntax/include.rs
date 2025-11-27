@@ -87,6 +87,43 @@ fn partial_with_context() {
 }
 
 #[test]
+fn partial_with_multi_context() {
+    let parent = "@include(partial; variable1=\"hello\" variable2=\"world\") {}";
+    let partial = "{{variable1}} {{variable2}}";
+
+    let mut templates = Templates::new();
+    templates.load_str("parent", parent);
+    templates.load_str("partial", partial);
+
+    let output = templates.render("parent", &Default::default());
+
+    let expected = "hello world";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn partial_with_multi_line_context() {
+    let parent = r#"
+@include(partial;
+    variable1="hello"
+    variable2="world"
+) {}"#;
+    let partial = "{{variable1}} {{variable2}}";
+
+    let mut templates = Templates::new();
+    templates.load_str("parent", parent);
+    templates.load_str("partial", partial);
+
+    let output = templates.render("parent", &Default::default());
+    let output = output.trim();
+
+    let expected = "hello world";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn partial_with_variable_context() {
     let parent = "@include(partial; partial_var=variable) {world}";
     let partial = "{{partial_var}} world";

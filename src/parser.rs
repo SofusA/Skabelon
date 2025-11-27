@@ -300,7 +300,10 @@ fn parse_for_expression(expr: &str) -> (String, String) {
 }
 
 fn parse_kv_pairs(s: &str) -> Vec<(String, LocalValue)> {
-    s.split(',')
+    let normalized = s.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    normalized
+        .split(' ')
         .filter_map(|pair| {
             let mut kv = pair.splitn(2, '=').map(|x| x.trim());
             let k = kv.next()?;
