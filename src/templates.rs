@@ -7,7 +7,7 @@ use crate::engine::{ContextStack, render_nodes};
 use crate::nodes::Node;
 use crate::parser::parse_template;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Templates {
     templates: HashMap<String, Vec<Node>>,
     glob: Option<String>,
