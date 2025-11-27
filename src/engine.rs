@@ -1,5 +1,5 @@
 use crate::{
-    nodes::{ForLoop, If, Include, LocalValue, Node},
+    nodes::{Condition, ForLoop, If, Include, LocalValue, Node},
     templates::Templates,
 };
 use serde_json::Value;
@@ -69,8 +69,8 @@ pub fn render_nodes(
                 otherwise,
             }) => {
                 let mut rendered = false;
-                for (path, body) in conditions {
-                    if evaluate_condition(path, ctx_stack) {
+                for (cond, body) in conditions {
+                    if evaluate_condition(cond, ctx_stack) {
                         out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                         rendered = true;
                         break;
@@ -149,7 +149,30 @@ pub fn render_nodes(
     out
 }
 
-fn evaluate_condition(path: &[String], ctx_stack: &ContextStack) -> bool {
+fn evaluate_condition(cond: &Condition, ctx_stack: &ContextStack) -> bool {
+    match cond {
+        Condition::Literal(b) => *b,
+        Condition::Path(path) => evaluate_path_truthiness(path, ctx_stack),
+        Condition::And(conds) => {
+            for c in conds {
+                if !evaluate_condition(c, ctx_stack) {
+                    return false;
+                }
+            }
+            true
+        }
+        Condition::Or(conds) => {
+            for c in conds {
+                if evaluate_condition(c, ctx_stack) {
+                    return true;
+                }
+            }
+            false
+        }
+    }
+}
+
+fn evaluate_path_truthiness(path: &[String], ctx_stack: &ContextStack) -> bool {
     if path.len() == 1 {
         let raw = &path[0];
         match raw.as_str() {

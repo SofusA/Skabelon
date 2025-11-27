@@ -18,8 +18,16 @@ pub struct ForLoop {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum Condition {
+    Path(Vec<String>),
+    And(Vec<Condition>),
+    Or(Vec<Condition>),
+    Literal(bool),
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct If {
-    pub conditions: Vec<(Vec<String>, Vec<Node>)>,
+    pub conditions: Vec<(Condition, Vec<Node>)>,
     pub otherwise: Option<Vec<Node>>,
 }
 

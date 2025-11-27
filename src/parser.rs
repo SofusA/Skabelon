@@ -1,4 +1,4 @@
-use crate::nodes::{ForLoop, If, Include, LocalValue, Node};
+use crate::nodes::{Condition, ForLoop, If, Include, LocalValue, Node};
 
 pub fn parse_template(input: &str) -> Vec<Node> {
     let mut p = Parser::new(input);
@@ -163,14 +163,14 @@ impl<'a> Parser<'a> {
         self.expect_char('(');
 
         let expr = self.read_until_unbalanced(')', '(');
-        let path = parse_variable_path(expr.trim());
+        let cond = parse_bool_expr(expr.trim()); // NEW
 
         self.skip_ws();
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
 
         let mut conditions = Vec::new();
-        conditions.push((path, body));
+        conditions.push((cond, body));
         let mut otherwise: Option<Vec<Node>> = None;
 
         loop {
@@ -186,13 +186,13 @@ impl<'a> Parser<'a> {
                     self.skip_ws();
                     self.expect_char('(');
                     let expr = self.read_until_unbalanced(')', '(');
-                    let path = parse_variable_path(expr.trim());
+                    let cond = parse_bool_expr(expr.trim()); // NEW
 
                     self.skip_ws();
                     self.expect_char('{');
                     let body = self.parse_nodes(Some('}'));
 
-                    conditions.push((path, body));
+                    conditions.push((cond, body));
                     continue;
                 } else {
                     // '@else { ... }'
@@ -359,4 +359,135 @@ fn parse_variable_path(expr: &str) -> Vec<String> {
         parts.push(current);
     }
     parts
+}
+
+#[derive(Debug, Clone)]
+enum Tok {
+    Ident(String),
+    And,
+    Or,
+    LParen,
+    RParen,
+}
+
+fn tokenize_bool(s: &str) -> Vec<Tok> {
+    let mut toks = Vec::new();
+    let mut cur = String::new();
+
+    let push_cur = |cur: &mut String, toks: &mut Vec<Tok>| {
+        if cur.is_empty() {
+            return;
+        }
+        let w = cur.trim().to_string();
+        cur.clear();
+        match w.as_str() {
+            "&&" | "and" => toks.push(Tok::And),
+            "||" | "or" => toks.push(Tok::Or),
+            _ => toks.push(Tok::Ident(w)),
+        }
+    };
+
+    for c in s.chars() {
+        match c {
+            '(' => {
+                push_cur(&mut cur, &mut toks);
+                toks.push(Tok::LParen);
+            }
+            ')' => {
+                push_cur(&mut cur, &mut toks);
+                toks.push(Tok::RParen);
+            }
+            c if c.is_whitespace() => {
+                push_cur(&mut cur, &mut toks);
+            }
+            _ => cur.push(c),
+        }
+    }
+    push_cur(&mut cur, &mut toks);
+    toks
+}
+
+struct Cursor {
+    toks: Vec<Tok>,
+    pos: usize,
+}
+
+impl Cursor {
+    fn new(toks: Vec<Tok>) -> Self {
+        Self { toks, pos: 0 }
+    }
+    fn peek(&self) -> Option<&Tok> {
+        self.toks.get(self.pos)
+    }
+    fn next(&mut self) -> Option<Tok> {
+        let t = self.toks.get(self.pos).cloned();
+        if t.is_some() {
+            self.pos += 1;
+        }
+        t
+    }
+}
+
+fn parse_bool_expr(s: &str) -> Condition {
+    let toks = tokenize_bool(s);
+    let mut cur = Cursor::new(toks);
+    parse_expr(&mut cur)
+}
+
+fn parse_expr(cur: &mut Cursor) -> Condition {
+    // expr := term ( "or" term )*
+    let left = parse_term(cur);
+    let mut parts = vec![left];
+
+    while let Some(Tok::Or) = cur.peek() {
+        cur.next(); // consume 'or'
+        let rhs = parse_term(cur);
+        parts.push(rhs);
+    }
+
+    if parts.len() == 1 {
+        parts.into_iter().next().unwrap()
+    } else {
+        Condition::Or(parts)
+    }
+}
+
+fn parse_term(cur: &mut Cursor) -> Condition {
+    // term := factor ( "and" factor )*
+    let left = parse_factor(cur);
+    let mut parts = vec![left];
+
+    while let Some(Tok::And) = cur.peek() {
+        cur.next(); // consume 'and'
+        let rhs = parse_factor(cur);
+        parts.push(rhs);
+    }
+
+    if parts.len() == 1 {
+        parts.into_iter().next().unwrap()
+    } else {
+        Condition::And(parts)
+    }
+}
+
+fn parse_factor(cur: &mut Cursor) -> Condition {
+    match cur.peek() {
+        Some(Tok::LParen) => {
+            cur.next(); // '('
+            let inner = parse_expr(cur);
+            match cur.next() {
+                Some(Tok::RParen) => inner,
+                _ => inner, // tolerate missing ')'
+            }
+        }
+        Some(Tok::Ident(_)) => match cur.next() {
+            Some(Tok::Ident(s)) => match s.as_str() {
+                "true" => Condition::Literal(true),
+                "false" => Condition::Literal(false),
+                _ => Condition::Path(parse_variable_path(&s)),
+            },
+            _ => Condition::Literal(false),
+        },
+        _ => Condition::Literal(false),
+    }
 }
