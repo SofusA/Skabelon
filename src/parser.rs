@@ -1,4 +1,4 @@
-use crate::nodes::{ForLoop, If, Include, Node};
+use crate::nodes::{ForLoop, If, Include, LocalValue, Node};
 
 pub fn parse_template(input: &str) -> Vec<Node> {
     let mut p = Parser::new(input);
@@ -29,10 +29,7 @@ impl<'a> Parser<'a> {
         let inner = self.read_until_unbalanced(')', '(');
         let mut parts = inner.splitn(2, ';').map(|s| s.trim());
         let path = parts.next().unwrap_or("").to_string();
-        let local_ctx = parts
-            .next()
-            .map(parse_kv_pairs_to_values)
-            .unwrap_or_default();
+        let local_ctx = parts.next().map(parse_kv_pairs).unwrap_or_default();
 
         // Optional block `{ ... }`
         self.skip_ws();
@@ -298,40 +295,26 @@ fn push_text_with_content_placeholders(nodes: &mut Vec<Node>, text: &str) {
     }
 }
 
-fn parse_kv_pairs_to_values(s: &str) -> Vec<(String, serde_json::Value)> {
+fn parse_kv_pairs(s: &str) -> Vec<(String, LocalValue)> {
     s.split(',')
         .filter_map(|pair| {
             let mut kv = pair.splitn(2, '=').map(|x| x.trim());
             let k = kv.next()?;
             let v = kv.next()?;
-            let val = parse_literal_to_value(v);
-            Some((k.to_string(), val))
+
+            if (v.starts_with('"') && v.ends_with('"'))
+                || (v.starts_with('\'') && v.ends_with('\''))
+            {
+                let inner = &v[1..v.len() - 1];
+                Some((
+                    k.to_string(),
+                    LocalValue::Literal(serde_json::Value::String(inner.to_string())),
+                ))
+            } else {
+                Some((k.to_string(), LocalValue::Path(parse_variable_path(v))))
+            }
         })
         .collect()
-}
-
-fn parse_literal_to_value(raw: &str) -> serde_json::Value {
-    let t = raw.trim();
-
-    if (t.starts_with('\'') && t.ends_with('\'')) || (t.starts_with('"') && t.ends_with('"')) {
-        let inner = &t[1..t.len() - 1];
-        serde_json::Value::String(inner.to_string())
-    } else {
-        match t {
-            "true" => serde_json::Value::Bool(true),
-            "false" => serde_json::Value::Bool(false),
-            "null" => serde_json::Value::Null,
-            _ => {
-                if let Ok(i) = t.parse::<i64>() {
-                    serde_json::Value::Number(i.into())
-                } else if let Ok(f) = t.parse::<f64>() {
-                    serde_json::json!(f)
-                } else {
-                    serde_json::Value::String(t.to_string())
-                }
-            }
-        }
-    }
 }
 
 fn parse_variable_path(expr: &str) -> Vec<String> {

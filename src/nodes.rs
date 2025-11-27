@@ -27,5 +27,11 @@ pub struct If {
 pub struct Include {
     pub path: String,
     pub body: Vec<Node>,
-    pub local_ctx: Vec<(String, Value)>,
+    pub local_ctx: Vec<(String, LocalValue)>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum LocalValue {
+    Literal(Value),
+    Path(Vec<String>),
 }

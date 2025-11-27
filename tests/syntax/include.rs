@@ -85,3 +85,21 @@ fn partial_with_context() {
 
     assert_eq!(output, expected);
 }
+
+#[test]
+fn partial_with_variable_context() {
+    let parent = "@include(partial; partial_var=variable) {world}";
+    let partial = "{{partial_var}} world";
+
+    let mut templates = Templates::new();
+    templates.load_str("parent", parent);
+    templates.load_str("partial", partial);
+
+    let ctx = json!({"variable": "hello"});
+
+    let output = templates.render("parent", &ctx);
+
+    let expected = "hello world";
+
+    assert_eq!(output, expected);
+}

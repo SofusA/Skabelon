@@ -1,5 +1,5 @@
 use crate::{
-    nodes::{ForLoop, If, Include, Node},
+    nodes::{ForLoop, If, Include, LocalValue, Node},
     templates::Templates,
 };
 use serde_json::Value;
@@ -106,8 +106,18 @@ pub fn render_nodes(
 
                     let mut partial_stack = ContextStack::new(Default::default());
                     partial_stack.push_scope();
-                    for (k, v) in local_ctx {
-                        partial_stack.set(k.clone(), v.clone());
+
+                    for (k, local_val) in local_ctx {
+                        match local_val {
+                            LocalValue::Literal(val) => partial_stack.set(k.clone(), val.clone()),
+                            LocalValue::Path(path) => {
+                                if let Some(val) = resolve_path(path, ctx_stack) {
+                                    partial_stack.set(k.clone(), val.clone());
+                                } else {
+                                    partial_stack.set(k.clone(), serde_json::Value::Null);
+                                }
+                            }
+                        }
                     }
 
                     let rendered = render_nodes(
