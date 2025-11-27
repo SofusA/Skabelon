@@ -7,11 +7,11 @@ use std::collections::HashMap;
 
 pub struct ContextStack<'a> {
     scopes: Vec<HashMap<String, serde_json::Value>>,
-    global: &'a HashMap<String, serde_json::Value>,
+    global: &'a serde_json::Value,
 }
 
 impl<'a> ContextStack<'a> {
-    pub fn new(global: &'a HashMap<String, serde_json::Value>) -> Self {
+    pub fn new(global: &'a serde_json::Value) -> Self {
         Self {
             scopes: Vec::new(),
             global,
@@ -104,8 +104,7 @@ pub fn render_nodes(
                 if let Some(partial_nodes) = templates.get(path) {
                     let parent_rendered_content = render_nodes(body, ctx_stack, templates, None);
 
-                    let empty_global: HashMap<String, Value> = HashMap::new();
-                    let mut partial_stack = ContextStack::new(&empty_global);
+                    let mut partial_stack = ContextStack::new(Default::default());
                     partial_stack.push_scope();
                     for (k, v) in local_ctx {
                         partial_stack.set(k.clone(), v.clone());

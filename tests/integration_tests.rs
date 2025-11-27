@@ -1,6 +1,5 @@
 use serde_json::json;
 use skabelon::Templates;
-use std::collections::HashMap;
 use std::time::Instant;
 
 mod syntax;
@@ -12,9 +11,7 @@ fn test() {
     let mut templates = Templates::new();
     templates.load_str("test", template_str);
 
-    let mut ctx = HashMap::new();
-    ctx.insert("show".to_string(), json!(true));
-    ctx.insert("items".to_string(), json!(["A", "B", "C"]));
+    let ctx = json!({"show": true, "items": ["A", "B", "C"]});
 
     let output = templates.render_template("test", ctx);
 
@@ -45,8 +42,7 @@ fn whites_space_test() {
     let mut templates = Templates::new();
     templates.load_str("test", template_str);
 
-    let ctx = HashMap::new();
-    let output = templates.render_template("test", ctx);
+    let output = templates.render_template("test", Default::default());
 
     assert_eq!(output, expected);
 }
@@ -66,12 +62,7 @@ fn big_test() {
 
     let object = json!({"true": true, "false": false, "number": 5, "string": "world", "none": None::<String>, "array": [1, 2, 3]});
 
-    let mut ctx = HashMap::new();
-    ctx.insert("bool_true".to_string(), json!(true));
-    ctx.insert("bool_false".to_string(), json!(false));
-    ctx.insert("array".to_string(), json!(["A", "B", "C"]));
-    ctx.insert("string".to_string(), json!("hello"));
-    ctx.insert("object".to_string(), object);
+    let ctx = json!({"bool_true": true,"bool_false": false, "array": ["A", "B", "C"], "string": "hello", "object": object });
 
     let output = templates
         .render_template("main.html", ctx)
@@ -101,8 +92,7 @@ fn big_table() {
     let mut templates = Templates::new();
     templates.load_str("big-table", template_str);
 
-    let mut ctx = HashMap::new();
-    ctx.insert("table".to_string(), json!(table));
+    let ctx = json!({"table": table});
 
     let timer = Instant::now();
     let output = templates.render_template("big-table", ctx);

@@ -1,6 +1,5 @@
 use serde_json::json;
 use skabelon::Templates;
-use std::collections::HashMap;
 use std::fs;
 
 #[test]
@@ -32,9 +31,7 @@ fn render_with_glob_and_relative_keys() {
 
     let mut templates = Templates::new();
     templates.load_glob(&format!("{}/**/*.html", base.to_str().unwrap()));
-    let mut ctx = HashMap::new();
-    ctx.insert("title".to_string(), json!("Hello World"));
-    ctx.insert("body".to_string(), json!("This is body"));
+    let ctx = json!({"title": "Hello World", "body": "This is body"});
 
     let output = templates.render_template("main.html", ctx);
     let expected = r#"

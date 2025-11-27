@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde_json::json;
 use skabelon::Templates;
 
@@ -17,8 +15,7 @@ fn for_loops() {
         .map(|x| json!({"index": x.0+1, "value": x.1}))
         .collect();
 
-    let mut ctx = HashMap::new();
-    ctx.insert("items".to_string(), json!(arr));
+    let ctx = json!({"items": arr});
 
     let output = templates.render_template("test", ctx);
 

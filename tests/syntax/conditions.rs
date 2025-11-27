@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use serde_json::{Value, json};
+use serde_json::json;
 use skabelon::Templates;
 
 #[test]
@@ -10,9 +8,7 @@ fn if_condition() {
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
 
-    let mut ctx = HashMap::new();
-    ctx.insert("value".to_string(), Value::Bool(true));
-    ctx.insert("other".to_string(), Value::Bool(false));
+    let ctx = json!({"value": true, "other": false});
 
     let output = templates.render_template("template", ctx);
 
@@ -28,8 +24,7 @@ fn if_else() {
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
 
-    let mut ctx = HashMap::new();
-    ctx.insert("value".to_string(), Value::Bool(false));
+    let ctx = json!({"value": false});
 
     let output = templates.render_template("template", ctx);
 
@@ -45,9 +40,7 @@ fn if_else_if() {
     let mut templates = Templates::new();
     templates.load_str("template", template);
 
-    let mut ctx = HashMap::new();
-    ctx.insert("a".to_string(), json!(false));
-    ctx.insert("b".to_string(), json!(true));
+    let ctx = json!({"a": false, "b": true});
 
     let output = templates.render_template("template", ctx);
     assert_eq!(output, "B");

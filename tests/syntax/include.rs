@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde_json::json;
 use skabelon::Templates;
 
@@ -12,8 +10,7 @@ fn partial() {
     templates.load_str("parent", parent);
     templates.load_str("partial", partial);
 
-    let ctx = HashMap::new();
-    let output = templates.render_template("parent", ctx);
+    let output = templates.render_template("parent", Default::default());
 
     let expected = "<span>Hello</span> <span>World</span>";
 
@@ -29,8 +26,7 @@ fn partial_no_block() {
     templates.load_str("parent", parent);
     templates.load_str("partial", partial);
 
-    let ctx = HashMap::new();
-    let output = templates.render_template("parent", ctx);
+    let output = templates.render_template("parent", Default::default());
 
     let expected = "<span>Hello</span><span>World</span>";
 
@@ -46,8 +42,7 @@ fn partial_block() {
     templates.load_str("parent", parent);
     templates.load_str("partial", partial);
 
-    let ctx = HashMap::new();
-    let output = templates.render_template("parent", ctx);
+    let output = templates.render_template("parent", Default::default());
 
     let expected = "<div>Hello World</div>";
 
@@ -64,8 +59,7 @@ fn partial_separated_context() {
     templates.load_str("parent", parent);
     templates.load_str("partial", partial);
 
-    let mut ctx = HashMap::new();
-    ctx.insert("parent_value".to_string(), json!("World"));
+    let ctx = json!({"parent_value": "World"});
 
     let output = templates.render_template("parent", ctx);
 
@@ -83,9 +77,7 @@ fn partial_with_context() {
     templates.load_str("parent", parent);
     templates.load_str("partial", partial);
 
-    let mut ctx = HashMap::new();
-    ctx.insert("parent_var".to_string(), json!("parent"));
-    ctx.insert("partial_var".to_string(), json!("partial"));
+    let ctx = json!({"parent_var": "parent", "partial_var": "partial"});
 
     let output = templates.render_template("parent", ctx);
 
