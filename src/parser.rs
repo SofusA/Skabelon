@@ -302,7 +302,11 @@ fn parse_for_expression(expr: &str) -> (String, String) {
 }
 
 fn parse_kv_pairs(s: &str) -> Vec<(String, LocalValue)> {
-    let normalized = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = s
+        .replace(';', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
 
     normalized
         .split(' ')
