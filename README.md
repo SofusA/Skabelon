@@ -26,7 +26,8 @@ templates.load_str("template", template_str);
 
 ### Context notation
 Context can be referenced in templates with `{{ key }}`.
-If key is an object, values can be referenced with `{{ key["value"] }}` or `{{ key.value }}`
+If `key` is an object, values can be referenced with `{{ key["value"] }}` or `{{ key.value }}`.
+If `key` is an array, array can be indexed with `{{ key[index] }}`.
 
 ### `@if`
 

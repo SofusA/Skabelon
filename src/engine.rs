@@ -259,11 +259,20 @@ fn resolve_path<'a>(path: &'a [String], ctx_stack: &'a ContextStack) -> Option<&
         return None;
     }
     let mut value = ctx_stack.get(&path[0])?;
+
     for key in &path[1..] {
-        if let Value::Object(map) = value {
-            value = map.get(key)?;
-        } else {
-            return None;
+        match value {
+            Value::Object(map) => {
+                value = map.get(key)?;
+            }
+            Value::Array(arr) => {
+                if let Ok(index) = key.parse::<usize>() {
+                    value = arr.get(index)?;
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
         }
     }
     Some(value)
