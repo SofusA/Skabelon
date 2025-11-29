@@ -3,8 +3,10 @@ name: Publish to crates.io
 
 on:
   push:
-    tags:
-      - 'v[0-9]+*'
+    branches:
+      - main
+    paths:
+      - 'Cargo.toml'
 
 jobs:
   publish:
@@ -13,9 +15,29 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  
+
+      - name: Check if version changed
+        id: version_check
+        run: |
+          current=$(grep -E '^version\s*=' Cargo.toml | sed 's/version\s*=\s*"\(.*\)"/\1/')
+          previous=$(git show HEAD^:Cargo.toml | grep -E '^version\s*=' | sed 's/version\s*=\s*"\(.*\)"/\1/')
+          
+          echo "Current: $current"
+          echo "Previous: $previous"
+
+          if [ "$current" != "$previous" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$current" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Run tests
+        if: steps.version_check.outputs.changed == 'true'
         run: cargo test
 
       - name: Publish to crates.io
+        if: steps.version_check.outputs.changed == 'true'
         run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}

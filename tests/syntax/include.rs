@@ -87,6 +87,38 @@ fn partial_with_context() {
 }
 
 #[test]
+fn partial_with_context_2() {
+    let parent = "@include(partial; show=true) {}";
+    let partial = "@if(show) {hello world}";
+
+    let mut templates = Templates::new();
+    templates.load_str("parent", parent);
+    templates.load_str("partial", partial);
+
+    let output = templates.render("parent", Default::default());
+
+    let expected = "hello world";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn partial_with_context_3() {
+    let parent = r#"@include(partial; variable=1) {}"#;
+    let partial = "{{variable}}";
+
+    let mut templates = Templates::new();
+    templates.load_str("parent", parent);
+    templates.load_str("partial", partial);
+
+    let output = templates.render("parent", Default::default());
+
+    let expected = "1";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn partial_with_multi_context() {
     let parent = "@include(partial; variable1=\"hello\" variable2=\"world\") {}";
     let partial = "{{variable1}} {{variable2}}";

@@ -302,14 +302,10 @@ fn parse_for_expression(expr: &str) -> (String, String) {
 }
 
 fn parse_kv_pairs(s: &str) -> Vec<(String, LocalValue)> {
-    let normalized = s
-        .replace(';', " ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let normalized = s.replace(';', " ");
+    let tokens = normalized.split_whitespace();
 
-    normalized
-        .split(' ')
+    tokens
         .filter_map(|pair| {
             let mut kv = pair.splitn(2, '=').map(|x| x.trim());
             let k = kv.next()?;
@@ -319,13 +315,33 @@ fn parse_kv_pairs(s: &str) -> Vec<(String, LocalValue)> {
                 || (v.starts_with('\'') && v.ends_with('\''))
             {
                 let inner = &v[1..v.len() - 1];
-                Some((
+                return Some((
                     k.to_string(),
-                    LocalValue::Literal(serde_json::Value::String(inner.to_string())),
-                ))
-            } else {
-                Some((k.to_string(), LocalValue::Path(parse_variable_path(v))))
+                    LocalValue::Literal(Value::String(inner.to_string())),
+                ));
             }
+
+            if v == "true" {
+                return Some((k.to_string(), LocalValue::Literal(Value::Bool(true))));
+            }
+
+            if v == "false" {
+                return Some((k.to_string(), LocalValue::Literal(Value::Bool(false))));
+            }
+
+            if v == "null" {
+                return Some((k.to_string(), LocalValue::Literal(Value::Null)));
+            }
+
+            if let Ok(i) = v.parse::<i64>() {
+                return Some((k.to_string(), LocalValue::Literal(Value::Number(i.into()))));
+            }
+
+            if let Ok(f) = v.parse::<f64>() {
+                return Some((k.to_string(), LocalValue::Literal(serde_json::json!(f))));
+            }
+
+            Some((k.to_string(), LocalValue::Path(parse_variable_path(v))))
         })
         .collect()
 }
