@@ -22,14 +22,15 @@ fn test() {
 
 #[test]
 fn support_emoji() {
-    let template_str = "Hi ☺️";
+    let template_str = r#"Hi ☺️ {{ variable }}"#;
 
     let mut templates = Templates::new();
     templates.load_str("test", template_str);
 
-    let output = templates.render("test", &json!({}));
+    let ctx = json!({"variable": "Bob"});
+    let output = templates.render("test", &ctx);
 
-    let expected = "Hi ☺️";
+    let expected = "Hi ☺️ Bob";
 
     assert_eq!(output, expected);
 }

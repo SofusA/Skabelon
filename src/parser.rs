@@ -9,21 +9,16 @@ pub fn parse_template(input: &str) -> Vec<Node> {
 
 struct Parser<'a> {
     src: &'a str,
-    chars: Vec<char>,
-    position: usize,
+    pos: usize,
 }
 
 impl<'a> Parser<'a> {
     fn new(src: &'a str) -> Self {
-        Self {
-            src,
-            chars: src.chars().collect(),
-            position: 0,
-        }
+        Self { src, pos: 0 }
     }
 
     fn parse_include(&mut self) -> Node {
-        self.position += "@include".len();
+        self.pos += "@include".len();
 
         self.skip_ws();
         self.expect_char('(');
@@ -36,7 +31,7 @@ impl<'a> Parser<'a> {
         // Optional block `{ ... }`
         self.skip_ws();
         let body = if self.peek_char() == Some('{') {
-            self.position += 1; // consume '{'
+            self.pos += 1; // consume '{'
             self.parse_nodes(Some('}'))
         } else {
             Vec::new()
@@ -58,22 +53,15 @@ impl<'a> Parser<'a> {
                 && self.peek_char() == Some(end)
             {
                 if !text_buf.is_empty() {
-                    if !text_buf.is_empty() {
-                        nodes.push(Node::Text(text_buf.clone()));
-                    }
-
-                    text_buf.clear();
+                    nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
-                self.position += 1;
+                self.pos += end.len_utf8(); // consume end
                 break;
             }
 
             if self.starts_with("{{") {
                 if !text_buf.is_empty() {
-                    if !text_buf.is_empty() {
-                        nodes.push(Node::Text(text_buf.clone()));
-                    }
-                    text_buf.clear();
+                    nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
                 nodes.push(Node::VariableBlock(self.parse_variable()));
                 continue;
@@ -81,10 +69,7 @@ impl<'a> Parser<'a> {
 
             if self.starts_with("@include") {
                 if !text_buf.is_empty() {
-                    if !text_buf.is_empty() {
-                        nodes.push(Node::Text(text_buf.clone()));
-                    }
-                    text_buf.clear();
+                    nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
                 nodes.push(self.parse_include());
                 continue;
@@ -92,10 +77,7 @@ impl<'a> Parser<'a> {
 
             if self.starts_with("@if") {
                 if !text_buf.is_empty() {
-                    if !text_buf.is_empty() {
-                        nodes.push(Node::Text(text_buf.clone()));
-                    }
-                    text_buf.clear();
+                    nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
                 nodes.push(self.parse_if());
                 continue;
@@ -103,10 +85,7 @@ impl<'a> Parser<'a> {
 
             if self.starts_with("@for") {
                 if !text_buf.is_empty() {
-                    if !text_buf.is_empty() {
-                        nodes.push(Node::Text(text_buf.clone()));
-                    }
-                    text_buf.clear();
+                    nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
                 nodes.push(self.parse_for());
                 continue;
@@ -114,52 +93,49 @@ impl<'a> Parser<'a> {
 
             if self.starts_with("@else") {
                 if !text_buf.is_empty() {
-                    if !text_buf.is_empty() {
-                        nodes.push(Node::Text(text_buf.clone()));
-                    }
-                    text_buf.clear();
+                    nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
-
                 text_buf.push_str("@else");
-                self.position += "@else".len();
+                self.pos += "@else".len();
                 continue;
             }
 
-            text_buf.push(self.chars[self.position]);
-            self.position += 1;
+            if let Some(ch) = self.peek_char() {
+                text_buf.push(ch);
+                self.advance_one();
+            } else {
+                break;
+            }
         }
 
-        if !text_buf.is_empty() && !text_buf.is_empty() {
-            nodes.push(Node::Text(text_buf.clone()));
+        if !text_buf.is_empty() {
+            nodes.push(Node::Text(text_buf));
         }
-
         nodes
     }
 
     fn parse_variable(&mut self) -> Vec<String> {
-        debug_assert!(self.starts_with("{{"));
-        self.position += 2;
-        let start = self.position;
+        self.pos += 2; // '{{' are ASCII, 2 bytes
+        let start = self.pos;
 
         while !self.eof() {
             if self.starts_with("}}") {
-                let expr = self.src[start..self.position].trim();
-                self.position += 2;
-
+                let expr = self.src[start..self.pos].trim();
+                self.pos += 2; // consume '}}'
                 let trimmed = expr.trim();
                 if trimmed == "content" {
                     return vec!["__CONTENT__".to_string()];
                 }
                 return parse_variable_path(trimmed);
             }
-            self.position += 1;
+            self.advance_one();
         }
 
         parse_variable_path(self.src[start..].trim())
     }
 
     fn parse_if(&mut self) -> Node {
-        self.position += "@if".len();
+        self.pos += "@if".len();
 
         self.skip_ws();
         self.expect_char('(');
@@ -179,12 +155,12 @@ impl<'a> Parser<'a> {
             self.skip_ws();
 
             if self.starts_with("@else") {
-                self.position += "@else".len();
+                self.pos += "@else".len();
                 self.skip_ws();
 
                 if self.starts_with("if") {
                     // '@else if (...) { ... }'
-                    self.position += "if".len();
+                    self.pos += "if".len();
                     self.skip_ws();
                     self.expect_char('(');
                     let expr = self.read_until_unbalanced(')', '(');
@@ -216,7 +192,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_for(&mut self) -> Node {
-        self.position += "@for".len();
+        self.pos += "@for".len();
 
         self.skip_ws();
         self.expect_char('(');
@@ -238,56 +214,70 @@ impl<'a> Parser<'a> {
     }
 
     fn read_until_unbalanced(&mut self, end: char, start_pair: char) -> String {
-        let start_position = self.position;
+        let start_position = self.pos;
         let mut depth = 0;
 
-        while !self.eof() {
-            let c = self.chars[self.position];
-
+        let iter = self.src[self.pos..].char_indices();
+        for (i, c) in iter {
             if c == start_pair {
                 depth += 1;
             } else if c == end {
                 if depth == 0 {
-                    let s = self.src[start_position..self.position].to_string();
-                    self.position += 1;
+                    let end_byte = self.pos + i;
+                    let s = self.src[start_position..end_byte].to_string();
+                    // consume the end char
+                    self.pos = end_byte + end.len_utf8();
                     return s;
                 } else {
                     depth -= 1;
                 }
             }
-            self.position += 1;
         }
 
-        self.src[start_position..].to_string()
+        let s = self.src[start_position..].to_string();
+        self.pos = self.src.len();
+        s
     }
 
-    fn expect_char(&mut self, expected: char) {
-        self.skip_ws();
-        if self.peek_char() == Some(expected) {
-            self.position += 1;
-        }
-    }
-
+    #[inline]
     fn skip_ws(&mut self) {
         while let Some(c) = self.peek_char() {
             if c.is_whitespace() {
-                self.position += 1;
+                self.pos += c.len_utf8();
             } else {
                 break;
             }
         }
     }
 
+    #[inline]
+    fn expect_char(&mut self, expected: char) {
+        self.skip_ws();
+        if self.peek_char() == Some(expected) {
+            self.pos += expected.len_utf8();
+        }
+    }
+
+    #[inline]
     fn peek_char(&self) -> Option<char> {
-        self.chars.get(self.position).copied()
+        self.src[self.pos..].chars().next()
     }
 
+    #[inline]
+    fn advance_one(&mut self) {
+        if let Some(ch) = self.peek_char() {
+            self.pos += ch.len_utf8();
+        }
+    }
+
+    #[inline]
     fn eof(&self) -> bool {
-        self.position >= self.chars.len()
+        self.pos >= self.src.len()
     }
 
+    #[inline]
     fn starts_with(&self, s: &str) -> bool {
-        self.src.get(self.position..self.position + s.len()) == Some(s)
+        self.src[self.pos..].starts_with(s)
     }
 }
 
