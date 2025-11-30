@@ -1,8 +1,7 @@
 # Skabelon
 
-Simple templating engine for rust. 
-
-Uses angular syntax, so you will be able to use the build in angular parser from prettier for formatting.
+Simple templating engine for rust, using Angular syntax.
+You can use the build-in Angular parser from Prettier for formatting.
 
 ## Features
 - Angular syntax
@@ -22,6 +21,14 @@ templates.load_glob("templates/**/*.html");
 let template_str =
     "<table>@for(row in table) {<tr>@for(col in row) {<td>{{col}}</td>}</tr>}</table>";
 templates.load_str("template", template_str);
+```
+
+Templates are rendered with:
+```rust
+let ctx = json!({"table": table});
+let render = templates.render("big-table.html", &ctx);
+// or for load_str
+let render = templates.render("template", &ctx);
 ```
 
 ### Context notation

@@ -9,16 +9,19 @@ pub fn parse_template(input: &str) -> Vec<Node> {
 
 struct Parser<'a> {
     src: &'a str,
-    pos: usize,
+    byte_offset: usize,
 }
 
 impl<'a> Parser<'a> {
     fn new(src: &'a str) -> Self {
-        Self { src, pos: 0 }
+        Self {
+            src,
+            byte_offset: 0,
+        }
     }
 
     fn parse_include(&mut self) -> Node {
-        self.pos += "@include".len();
+        self.byte_offset += "@include".len();
 
         self.skip_ws();
         self.expect_char('(');
@@ -31,7 +34,7 @@ impl<'a> Parser<'a> {
         // Optional block `{ ... }`
         self.skip_ws();
         let body = if self.peek_char() == Some('{') {
-            self.pos += 1; // consume '{'
+            self.byte_offset += 1; // consume '{'
             self.parse_nodes(Some('}'))
         } else {
             Vec::new()
@@ -55,7 +58,7 @@ impl<'a> Parser<'a> {
                 if !text_buf.is_empty() {
                     nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
-                self.pos += end.len_utf8(); // consume end
+                self.byte_offset += end.len_utf8(); // consume end
                 break;
             }
 
@@ -96,7 +99,7 @@ impl<'a> Parser<'a> {
                     nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
                 text_buf.push_str("@else");
-                self.pos += "@else".len();
+                self.byte_offset += "@else".len();
                 continue;
             }
 
@@ -115,13 +118,13 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_variable(&mut self) -> Vec<String> {
-        self.pos += 2; // '{{' are ASCII, 2 bytes
-        let start = self.pos;
+        self.byte_offset += 2; // '{{' are ASCII, 2 bytes
+        let start = self.byte_offset;
 
         while !self.eof() {
             if self.starts_with("}}") {
-                let expr = self.src[start..self.pos].trim();
-                self.pos += 2; // consume '}}'
+                let expr = self.src[start..self.byte_offset].trim();
+                self.byte_offset += 2; // consume '}}'
                 let trimmed = expr.trim();
                 if trimmed == "content" {
                     return vec!["__CONTENT__".to_string()];
@@ -135,7 +138,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if(&mut self) -> Node {
-        self.pos += "@if".len();
+        self.byte_offset += "@if".len();
 
         self.skip_ws();
         self.expect_char('(');
@@ -155,12 +158,12 @@ impl<'a> Parser<'a> {
             self.skip_ws();
 
             if self.starts_with("@else") {
-                self.pos += "@else".len();
+                self.byte_offset += "@else".len();
                 self.skip_ws();
 
                 if self.starts_with("if") {
                     // '@else if (...) { ... }'
-                    self.pos += "if".len();
+                    self.byte_offset += "if".len();
                     self.skip_ws();
                     self.expect_char('(');
                     let expr = self.read_until_unbalanced(')', '(');
@@ -192,7 +195,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_for(&mut self) -> Node {
-        self.pos += "@for".len();
+        self.byte_offset += "@for".len();
 
         self.skip_ws();
         self.expect_char('(');
@@ -214,19 +217,19 @@ impl<'a> Parser<'a> {
     }
 
     fn read_until_unbalanced(&mut self, end: char, start_pair: char) -> String {
-        let start_position = self.pos;
+        let start_position = self.byte_offset;
         let mut depth = 0;
 
-        let iter = self.src[self.pos..].char_indices();
+        let iter = self.src[self.byte_offset..].char_indices();
         for (i, c) in iter {
             if c == start_pair {
                 depth += 1;
             } else if c == end {
                 if depth == 0 {
-                    let end_byte = self.pos + i;
+                    let end_byte = self.byte_offset + i;
                     let s = self.src[start_position..end_byte].to_string();
                     // consume the end char
-                    self.pos = end_byte + end.len_utf8();
+                    self.byte_offset = end_byte + end.len_utf8();
                     return s;
                 } else {
                     depth -= 1;
@@ -235,7 +238,7 @@ impl<'a> Parser<'a> {
         }
 
         let s = self.src[start_position..].to_string();
-        self.pos = self.src.len();
+        self.byte_offset = self.src.len();
         s
     }
 
@@ -243,7 +246,7 @@ impl<'a> Parser<'a> {
     fn skip_ws(&mut self) {
         while let Some(c) = self.peek_char() {
             if c.is_whitespace() {
-                self.pos += c.len_utf8();
+                self.byte_offset += c.len_utf8();
             } else {
                 break;
             }
@@ -254,30 +257,30 @@ impl<'a> Parser<'a> {
     fn expect_char(&mut self, expected: char) {
         self.skip_ws();
         if self.peek_char() == Some(expected) {
-            self.pos += expected.len_utf8();
+            self.byte_offset += expected.len_utf8();
         }
     }
 
     #[inline]
     fn peek_char(&self) -> Option<char> {
-        self.src[self.pos..].chars().next()
+        self.src[self.byte_offset..].chars().next()
     }
 
     #[inline]
     fn advance_one(&mut self) {
         if let Some(ch) = self.peek_char() {
-            self.pos += ch.len_utf8();
+            self.byte_offset += ch.len_utf8();
         }
     }
 
     #[inline]
     fn eof(&self) -> bool {
-        self.pos >= self.src.len()
+        self.byte_offset >= self.src.len()
     }
 
     #[inline]
     fn starts_with(&self, s: &str) -> bool {
-        self.src[self.pos..].starts_with(s)
+        self.src[self.byte_offset..].starts_with(s)
     }
 }
 
