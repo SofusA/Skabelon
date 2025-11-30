@@ -21,6 +21,20 @@ fn test() {
 }
 
 #[test]
+fn support_emoji() {
+    let template_str = "Hi ☺️";
+
+    let mut templates = Templates::new();
+    templates.load_str("test", template_str);
+
+    let output = templates.render("test", &json!({}));
+
+    let expected = "Hi ☺️";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn whites_space_test() {
     let template_str = r#"
 <h1>Testing template</h1>

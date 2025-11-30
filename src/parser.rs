@@ -287,8 +287,7 @@ impl<'a> Parser<'a> {
     }
 
     fn starts_with(&self, s: &str) -> bool {
-        let end = self.position + s.len();
-        end <= self.chars.len() && &self.src[self.position..end] == s
+        self.src.get(self.position..self.position + s.len()) == Some(s)
     }
 }
 
