@@ -39,7 +39,7 @@ pub enum Condition {
     Path(Vec<String>),
     And(Vec<Condition>),
     Or(Vec<Condition>),
-    Not(Box<Condition>), // <-- ADD THIS
+    Not(Box<Condition>),
     Compare {
         left: Operand,
         op: CompareOp,

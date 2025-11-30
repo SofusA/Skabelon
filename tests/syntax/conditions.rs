@@ -221,7 +221,7 @@ fn if_variable_ne_variable() {
 }
 
 #[test]
-fn if_number_comparisons_literals() {
+fn number_comparisons_literals() {
     let template_str =
         r#"@if(num1 < 10) {a } @if(num2 > 5) {b } @if(num3 <= 3) {c } @if(num4 >= 7) {d}"#;
 
@@ -237,7 +237,7 @@ fn if_number_comparisons_literals() {
 }
 
 #[test]
-fn if_number_comparisons_variable_to_variable() {
+fn number_comparisons_variable_to_variable() {
     let template_str = r#"@if(a < b) {x } @if(b > c) {y } @if(c <= d) {z } @if(d >= e) {w}"#;
 
     let mut templates = Templates::new();
@@ -252,13 +252,12 @@ fn if_number_comparisons_variable_to_variable() {
 }
 
 #[test]
-fn if_string_ordering() {
+fn string_ordering() {
     let template_str = r#"@if(val1 < val2) {l } @if(val2 > val1) {g } @if(val1 <= val1) {le } @if(val2 >= val2) {ge}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
 
-    // Lexicographic comparisons
     let ctx = json!({"val1": "A", "val2": "B"});
 
     let output = templates.render("template", &ctx);
@@ -268,7 +267,7 @@ fn if_string_ordering() {
 }
 
 #[test]
-fn if_boolean_literals_and_variables() {
+fn boolean_literals_and_variables() {
     let template_str =
         r#"@if(flag1 == true) {T1 } @if(flag2 == false) {T2 } @if(flag3 != true) {T3}"#;
 
@@ -284,32 +283,27 @@ fn if_boolean_literals_and_variables() {
 }
 
 #[test]
-fn if_mixed_types_equality() {
+fn mixed_types_equality() {
     let template_str = r#"@if(str1 == "10") {S } @if(num1 == 10) {N } @if(str1 != num1) {M}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
 
-    // str1 (string) vs num1 (number)
     let ctx = json!({ "str1": "10", "num1": 10 });
 
     let output = templates.render("template", &ctx);
 
-    // Our compare_values handles Eq for mixed by Value equality;
-    // String("10") != Number(10), so S and N are true individually, M is true because mixed !=
     let expected = "S N M";
     assert_eq!(output, expected);
 }
 
 #[test]
-fn if_and_or_precedence() {
-    // and binds tighter than or
+fn and_or_precedence() {
     let template_str = r#"@if(value1 and value2 or value3) {hello}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
 
-    // value1 and value2 => true && false = false; false or true = true => hello
     let ctx = json!({"value1": true, "value2": false, "value3": true});
 
     let output = templates.render("template", &ctx);
@@ -319,14 +313,12 @@ fn if_and_or_precedence() {
 }
 
 #[test]
-fn if_parentheses_precedence() {
-    // parentheses change precedence
+fn parentheses_precedence() {
     let template_str = r#"@if((value1 or value2) and value3) {hello}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
 
-    // (true or false) and true => true and true => true
     let ctx = json!({"value1": true, "value2": false, "value3": true});
 
     let output = templates.render("template", &ctx);
@@ -336,7 +328,7 @@ fn if_parentheses_precedence() {
 }
 
 #[test]
-fn if_unary_not_simple() {
+fn not() {
     let template_str = r#"@if(!value) {hello}"#;
 
     let mut templates = Templates::new();
@@ -351,7 +343,7 @@ fn if_unary_not_simple() {
 }
 
 #[test]
-fn if_unary_not_with_comparison() {
+fn not_with_comparison() {
     let template_str = r#"@if(!(value1 == "A")) {hello}"#;
 
     let mut templates = Templates::new();
@@ -366,7 +358,7 @@ fn if_unary_not_with_comparison() {
 }
 
 #[test]
-fn if_unary_not_and_or_combo() {
+fn not_and_or_combo() {
     let template_str = r#"@if(!value1 and (value2 == "X" or value3 == "Y")) {hello}"#;
 
     let mut templates = Templates::new();
@@ -381,7 +373,7 @@ fn if_unary_not_and_or_combo() {
 }
 
 #[test]
-fn if_variable_vs_literal_number_edge() {
+fn variable_vs_literal_number_edge() {
     let template_str = r#"@if(n == 0) {z } @if(n != 0) {nz } @if(n > -1) {gt } @if(n >= 0) {ge}"#;
 
     let mut templates = Templates::new();
@@ -396,7 +388,7 @@ fn if_variable_vs_literal_number_edge() {
 }
 
 #[test]
-fn if_variable_vs_variable_booleans() {
+fn variable_vs_variable_booleans() {
     let template_str = r#"@if(a == b) {eq } @if(a != b) {ne}"#;
 
     let mut templates = Templates::new();
@@ -411,8 +403,8 @@ fn if_variable_vs_variable_booleans() {
 }
 
 #[test]
-fn if_mixed_numeric_float_int() {
-    let template_str = r#"@if(f == 1.1) {eqf } @if(i == 1) {eqi } @if(f == i) {eqm}"#;
+fn mixed_numeric_float_int() {
+    let template_str = r#"@if(f == 1.1) {float } @if(i == 1) {int } @if(f == i) {match}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -421,13 +413,13 @@ fn if_mixed_numeric_float_int() {
 
     let output = templates.render("template", &ctx);
 
-    let expected = "eqf eqi ";
+    let expected = "float int ";
     assert_eq!(output, expected);
 }
 
 #[test]
-fn if_string_equality_variable_to_literal_quotes() {
-    let template_str = r#"@if(name == "Alice") {hi } @if(name != "Bob") {notbob}"#;
+fn string_equality_variable_to_literal_quotes() {
+    let template_str = r#"@if(name == "Alice") {hi } @if(name != "Bob") {not Bob}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -436,7 +428,7 @@ fn if_string_equality_variable_to_literal_quotes() {
 
     let output = templates.render("template", &ctx);
 
-    let expected = "hi notbob";
+    let expected = "hi not Bob";
     assert_eq!(output, expected);
 }
 

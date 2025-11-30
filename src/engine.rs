@@ -55,7 +55,6 @@ pub fn render_nodes(
             Node::Text(s) => out.push_str(s),
 
             Node::VariableBlock(path) => {
-                // Special {{content}} marker support if you added it
                 if path.len() == 1 && path[0] == "__CONTENT__" {
                     if let Some(html) = content_html {
                         out.push_str(html);
@@ -156,7 +155,7 @@ fn evaluate_condition(cond: &Condition, ctx_stack: &ContextStack) -> bool {
         Condition::Path(path) => evaluate_path_truthiness(path, ctx_stack),
         Condition::And(conds) => conds.iter().all(|c| evaluate_condition(c, ctx_stack)),
         Condition::Or(conds) => conds.iter().any(|c| evaluate_condition(c, ctx_stack)),
-        Condition::Not(inner) => !evaluate_condition(inner, ctx_stack), // <-- ADD THIS
+        Condition::Not(inner) => !evaluate_condition(inner, ctx_stack),
         Condition::Compare { left, op, right } => {
             let l = resolve_operand(left, ctx_stack);
             let r = resolve_operand(right, ctx_stack);
@@ -205,7 +204,7 @@ fn compare_values(left: &Value, op: &CompareOp, right: &Value) -> bool {
         _ => match op {
             CompareOp::Eq => left == right,
             CompareOp::Ne => left != right,
-            _ => false, // ordering doesn't make sense for mixed types
+            _ => false,
         },
     }
 }

@@ -10,7 +10,7 @@ pub fn parse_template(input: &str) -> Vec<Node> {
 struct Parser<'a> {
     src: &'a str,
     chars: Vec<char>,
-    pos: usize,
+    position: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -18,12 +18,12 @@ impl<'a> Parser<'a> {
         Self {
             src,
             chars: src.chars().collect(),
-            pos: 0,
+            position: 0,
         }
     }
 
     fn parse_include(&mut self) -> Node {
-        self.pos += "@include".len();
+        self.position += "@include".len();
 
         self.skip_ws();
         self.expect_char('(');
@@ -36,7 +36,7 @@ impl<'a> Parser<'a> {
         // Optional block `{ ... }`
         self.skip_ws();
         let body = if self.peek_char() == Some('{') {
-            self.pos += 1; // consume '{'
+            self.position += 1; // consume '{'
             self.parse_nodes(Some('}'))
         } else {
             Vec::new()
@@ -64,7 +64,7 @@ impl<'a> Parser<'a> {
 
                     text_buf.clear();
                 }
-                self.pos += 1;
+                self.position += 1;
                 break;
             }
 
@@ -121,12 +121,12 @@ impl<'a> Parser<'a> {
                 }
 
                 text_buf.push_str("@else");
-                self.pos += "@else".len();
+                self.position += "@else".len();
                 continue;
             }
 
-            text_buf.push(self.chars[self.pos]);
-            self.pos += 1;
+            text_buf.push(self.chars[self.position]);
+            self.position += 1;
         }
 
         if !text_buf.is_empty() && !text_buf.is_empty() {
@@ -138,13 +138,13 @@ impl<'a> Parser<'a> {
 
     fn parse_variable(&mut self) -> Vec<String> {
         debug_assert!(self.starts_with("{{"));
-        self.pos += 2;
-        let start = self.pos;
+        self.position += 2;
+        let start = self.position;
 
         while !self.eof() {
             if self.starts_with("}}") {
-                let expr = self.src[start..self.pos].trim();
-                self.pos += 2;
+                let expr = self.src[start..self.position].trim();
+                self.position += 2;
 
                 let trimmed = expr.trim();
                 if trimmed == "content" {
@@ -152,20 +152,20 @@ impl<'a> Parser<'a> {
                 }
                 return parse_variable_path(trimmed);
             }
-            self.pos += 1;
+            self.position += 1;
         }
 
         parse_variable_path(self.src[start..].trim())
     }
 
     fn parse_if(&mut self) -> Node {
-        self.pos += "@if".len();
+        self.position += "@if".len();
 
         self.skip_ws();
         self.expect_char('(');
 
         let expr = self.read_until_unbalanced(')', '(');
-        let cond = parse_bool_expr(expr.trim()); // NEW
+        let cond = parse_bool_expr(expr.trim());
 
         self.skip_ws();
         self.expect_char('{');
@@ -179,16 +179,16 @@ impl<'a> Parser<'a> {
             self.skip_ws();
 
             if self.starts_with("@else") {
-                self.pos += "@else".len();
+                self.position += "@else".len();
                 self.skip_ws();
 
                 if self.starts_with("if") {
                     // '@else if (...) { ... }'
-                    self.pos += "if".len();
+                    self.position += "if".len();
                     self.skip_ws();
                     self.expect_char('(');
                     let expr = self.read_until_unbalanced(')', '(');
-                    let cond = parse_bool_expr(expr.trim()); // NEW
+                    let cond = parse_bool_expr(expr.trim());
 
                     self.skip_ws();
                     self.expect_char('{');
@@ -216,9 +216,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_for(&mut self) -> Node {
-        self.pos += "@for".len();
+        self.position += "@for".len();
 
-        // Allow optional whitespace before '('
         self.skip_ws();
         self.expect_char('(');
 
@@ -239,40 +238,40 @@ impl<'a> Parser<'a> {
     }
 
     fn read_until_unbalanced(&mut self, end: char, start_pair: char) -> String {
-        let start_pos = self.pos;
+        let start_position = self.position;
         let mut depth = 0;
 
         while !self.eof() {
-            let c = self.chars[self.pos];
+            let c = self.chars[self.position];
 
             if c == start_pair {
                 depth += 1;
             } else if c == end {
                 if depth == 0 {
-                    let s = self.src[start_pos..self.pos].to_string();
-                    self.pos += 1;
+                    let s = self.src[start_position..self.position].to_string();
+                    self.position += 1;
                     return s;
                 } else {
                     depth -= 1;
                 }
             }
-            self.pos += 1;
+            self.position += 1;
         }
 
-        self.src[start_pos..].to_string()
+        self.src[start_position..].to_string()
     }
 
     fn expect_char(&mut self, expected: char) {
         self.skip_ws();
         if self.peek_char() == Some(expected) {
-            self.pos += 1;
+            self.position += 1;
         }
     }
 
     fn skip_ws(&mut self) {
         while let Some(c) = self.peek_char() {
             if c.is_whitespace() {
-                self.pos += 1;
+                self.position += 1;
             } else {
                 break;
             }
@@ -280,16 +279,16 @@ impl<'a> Parser<'a> {
     }
 
     fn peek_char(&self) -> Option<char> {
-        self.chars.get(self.pos).copied()
+        self.chars.get(self.position).copied()
     }
 
     fn eof(&self) -> bool {
-        self.pos >= self.chars.len()
+        self.position >= self.chars.len()
     }
 
     fn starts_with(&self, s: &str) -> bool {
-        let end = self.pos + s.len();
-        end <= self.chars.len() && &self.src[self.pos..end] == s
+        let end = self.position + s.len();
+        end <= self.chars.len() && &self.src[self.position..end] == s
     }
 }
 
@@ -383,9 +382,8 @@ fn parse_variable_path(expr: &str) -> Vec<String> {
     parts
 }
 
-// Token types
 #[derive(Debug, Clone)]
-enum Tok {
+enum Token {
     Ident(String),
     And,
     Or,
@@ -402,7 +400,7 @@ enum Tok {
 
 fn parse_unary(cur: &mut Cursor) -> Condition {
     match cur.peek() {
-        Some(Tok::Not) => {
+        Some(Token::Not) => {
             cur.next(); // consume '!'
             let inner = parse_unary(cur); // right-associative
             Condition::Not(Box::new(inner))
@@ -411,21 +409,21 @@ fn parse_unary(cur: &mut Cursor) -> Condition {
     }
 }
 
-fn tokenize_bool(s: &str) -> Vec<Tok> {
-    let mut toks = Vec::new();
+fn tokenize_bool(s: &str) -> Vec<Token> {
+    let mut tokens = Vec::new();
     let mut cur = String::new();
 
-    let push_cur = |cur: &mut String, toks: &mut Vec<Tok>| {
+    let push_cur = |cur: &mut String, tokens: &mut Vec<Token>| {
         if cur.is_empty() {
             return;
         }
         let w = cur.trim().to_string();
         cur.clear();
         match w.as_str() {
-            "and" | "&&" => toks.push(Tok::And),
-            "or" | "||" => toks.push(Tok::Or),
-            "not" => toks.push(Tok::Not),
-            _ => toks.push(Tok::Ident(w)),
+            "and" | "&&" => tokens.push(Token::And),
+            "or" | "||" => tokens.push(Token::Or),
+            "not" => tokens.push(Token::Not),
+            _ => tokens.push(Token::Ident(w)),
         }
     };
 
@@ -433,82 +431,85 @@ fn tokenize_bool(s: &str) -> Vec<Tok> {
     while let Some(c) = chars.next() {
         match c {
             '(' => {
-                push_cur(&mut cur, &mut toks);
-                toks.push(Tok::LParen);
+                push_cur(&mut cur, &mut tokens);
+                tokens.push(Token::LParen);
             }
             ')' => {
-                push_cur(&mut cur, &mut toks);
-                toks.push(Tok::RParen);
+                push_cur(&mut cur, &mut tokens);
+                tokens.push(Token::RParen);
             }
             '=' => {
-                push_cur(&mut cur, &mut toks);
+                push_cur(&mut cur, &mut tokens);
                 if chars.peek() == Some(&'=') {
                     chars.next();
-                    toks.push(Tok::Eq);
+                    tokens.push(Token::Eq);
                 }
             }
             '!' => {
-                push_cur(&mut cur, &mut toks);
+                push_cur(&mut cur, &mut tokens);
                 if chars.peek() == Some(&'=') {
                     chars.next();
-                    toks.push(Tok::Ne);
+                    tokens.push(Token::Ne);
                 } else {
-                    toks.push(Tok::Not);
+                    tokens.push(Token::Not);
                 }
             }
             '<' => {
-                push_cur(&mut cur, &mut toks);
+                push_cur(&mut cur, &mut tokens);
                 if chars.peek() == Some(&'=') {
                     chars.next();
-                    toks.push(Tok::Le);
+                    tokens.push(Token::Le);
                 } else {
-                    toks.push(Tok::Lt);
+                    tokens.push(Token::Lt);
                 }
             }
             '>' => {
-                push_cur(&mut cur, &mut toks);
+                push_cur(&mut cur, &mut tokens);
                 if chars.peek() == Some(&'=') {
                     chars.next();
-                    toks.push(Tok::Ge);
+                    tokens.push(Token::Ge);
                 } else {
-                    toks.push(Tok::Gt);
+                    tokens.push(Token::Gt);
                 }
             }
 
             c if c.is_whitespace() => {
-                push_cur(&mut cur, &mut toks);
+                push_cur(&mut cur, &mut tokens);
             }
             _ => cur.push(c),
         }
     }
-    push_cur(&mut cur, &mut toks);
-    toks
+    push_cur(&mut cur, &mut tokens);
+    tokens
 }
 
 struct Cursor {
-    toks: Vec<Tok>,
-    pos: usize,
+    tokens: Vec<Token>,
+    position: usize,
 }
 
 impl Cursor {
-    fn new(toks: Vec<Tok>) -> Self {
-        Self { toks, pos: 0 }
+    fn new(tokens: Vec<Token>) -> Self {
+        Self {
+            tokens,
+            position: 0,
+        }
     }
-    fn peek(&self) -> Option<&Tok> {
-        self.toks.get(self.pos)
+    fn peek(&self) -> Option<&Token> {
+        self.tokens.get(self.position)
     }
-    fn next(&mut self) -> Option<Tok> {
-        let t = self.toks.get(self.pos).cloned();
+    fn next(&mut self) -> Option<Token> {
+        let t = self.tokens.get(self.position).cloned();
         if t.is_some() {
-            self.pos += 1;
+            self.position += 1;
         }
         t
     }
 }
 
 fn parse_bool_expr(s: &str) -> Condition {
-    let toks = tokenize_bool(s);
-    let mut cur = Cursor::new(toks);
+    let tokens = tokenize_bool(s);
+    let mut cur = Cursor::new(tokens);
     parse_expr(&mut cur)
 }
 
@@ -516,7 +517,7 @@ fn parse_expr(cur: &mut Cursor) -> Condition {
     let left = parse_term(cur);
     let mut parts = vec![left];
 
-    while let Some(Tok::Or) = cur.peek() {
+    while let Some(Token::Or) = cur.peek() {
         cur.next();
         let rhs = parse_term(cur);
         parts.push(rhs);
@@ -533,7 +534,7 @@ fn parse_term(cur: &mut Cursor) -> Condition {
     let left = parse_unary(cur);
     let mut parts = vec![left];
 
-    while let Some(Tok::And) = cur.peek() {
+    while let Some(Token::And) = cur.peek() {
         cur.next();
         let rhs = parse_unary(cur);
         parts.push(rhs);
@@ -548,16 +549,16 @@ fn parse_term(cur: &mut Cursor) -> Condition {
 
 fn parse_factor(cur: &mut Cursor) -> Condition {
     match cur.peek() {
-        Some(Tok::LParen) => {
+        Some(Token::LParen) => {
             cur.next(); // '('
             let inner = parse_expr(cur);
-            if let Some(Tok::RParen) = cur.peek() {
+            if let Some(Token::RParen) = cur.peek() {
                 cur.next(); // ')'
             }
             inner
         }
-        Some(Tok::Ident(_)) => {
-            let left_ident = if let Some(Tok::Ident(s)) = cur.next() {
+        Some(Token::Ident(_)) => {
+            let left_ident = if let Some(Token::Ident(s)) = cur.next() {
                 s
             } else {
                 String::new()
@@ -576,9 +577,9 @@ fn parse_factor(cur: &mut Cursor) -> Condition {
     }
 }
 
-fn parse_operand(tok: Option<Tok>) -> Operand {
+fn parse_operand(tok: Option<Token>) -> Operand {
     match tok {
-        Some(Tok::Ident(s)) => {
+        Some(Token::Ident(s)) => {
             let t = s.as_str();
             let is_quoted = (t.starts_with('"') && t.ends_with('"'))
                 || (t.starts_with('\'') && t.ends_with('\''));
@@ -587,7 +588,7 @@ fn parse_operand(tok: Option<Tok>) -> Operand {
             let is_float = t.parse::<f64>().is_ok();
 
             if is_quoted || is_bool || is_int || is_float {
-                Operand::Literal(parse_literal(Some(Tok::Ident(s))))
+                Operand::Literal(parse_literal(Some(Token::Ident(s))))
             } else {
                 Operand::Path(parse_variable_path(&s))
             }
@@ -596,21 +597,21 @@ fn parse_operand(tok: Option<Tok>) -> Operand {
     }
 }
 
-fn parse_compare_op(tok: &Tok) -> Option<CompareOp> {
+fn parse_compare_op(tok: &Token) -> Option<CompareOp> {
     match tok {
-        Tok::Eq => Some(CompareOp::Eq),
-        Tok::Ne => Some(CompareOp::Ne),
-        Tok::Lt => Some(CompareOp::Lt),
-        Tok::Gt => Some(CompareOp::Gt),
-        Tok::Le => Some(CompareOp::Le),
-        Tok::Ge => Some(CompareOp::Ge),
+        Token::Eq => Some(CompareOp::Eq),
+        Token::Ne => Some(CompareOp::Ne),
+        Token::Lt => Some(CompareOp::Lt),
+        Token::Gt => Some(CompareOp::Gt),
+        Token::Le => Some(CompareOp::Le),
+        Token::Ge => Some(CompareOp::Ge),
         _ => None,
     }
 }
 
-fn parse_literal(tok: Option<Tok>) -> Value {
+fn parse_literal(tok: Option<Token>) -> Value {
     match tok {
-        Some(Tok::Ident(s)) => {
+        Some(Token::Ident(s)) => {
             if s == "true" {
                 Value::Bool(true)
             } else if s == "false" {

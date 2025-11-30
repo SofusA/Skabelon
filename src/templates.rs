@@ -103,7 +103,7 @@ fn derive_base_dir(pattern: &str) -> String {
         let base = base.trim_end_matches('/');
         base.to_string()
     } else {
-        // No wildcard? Use parent directory
+        // No wildcard. Use parent directory
         let path = std::path::Path::new(pattern);
         path.parent()
             .unwrap_or_else(|| std::path::Path::new("."))
