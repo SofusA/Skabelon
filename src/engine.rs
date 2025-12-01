@@ -92,8 +92,9 @@ pub fn render_nodes(
 
                 if let Some(items) = items_opt {
                     ctx_stack.push_scope();
-                    for item in items {
-                        ctx_stack.set(value.clone(), item);
+                    for item in items.into_iter().enumerate() {
+                        ctx_stack.set(value.clone(), item.1);
+                        ctx_stack.set("index".into(), Value::from(item.0));
                         out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                     }
                     ctx_stack.pop_scope();

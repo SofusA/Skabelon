@@ -77,11 +77,11 @@ Supports `==`, `!=`, `&&`, `||`, `<`, `>`, `<=`, `>=`,
 ```
 
 ### `@for`
-Iterates over array.
+Iterates over array. `index` is added to the context:
 
 ```html
 @for (item in items) {
-  {{item}}
+  {{index}}: {{item}}
 }
 ```
 

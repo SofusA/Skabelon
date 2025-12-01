@@ -23,3 +23,21 @@ fn for_loops() {
 
     assert_eq!(output, expected);
 }
+
+#[test]
+fn index() {
+    let template_str = "@for(item in items) {<span>{{index}}: {{item}}</span>}";
+
+    let mut templates = Templates::new();
+    templates.load_str("test", template_str);
+
+    let arr = ["A", "B", "C"];
+
+    let ctx = json!({"items": arr});
+
+    let output = templates.render("test", &ctx);
+
+    let expected = "<span>0: A</span><span>1: B</span><span>2: C</span>";
+
+    assert_eq!(output, expected);
+}
