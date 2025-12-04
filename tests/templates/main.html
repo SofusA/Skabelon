@@ -48,14 +48,14 @@
 }
 
 <h2>Partials</h2>
-@include (partial1.html) {
+@defer (partial1.html) {
   <span>partial block works</span>
 }
 
-@include (partial2.html) {}
+@defer (partial2.html) {}
 
 @if (object.true) {
-  @include (partial3.html) {
+  @defer (partial3.html) {
     <span>conditional partial works</span>
   }
 }

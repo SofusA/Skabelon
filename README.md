@@ -8,7 +8,7 @@ You can use the build-in Angular parser from Prettier for formatting.
 - Templates are parsed at runtime. Templates can be recalculated with `templates.reload()`.
 - `@if() {} @else if() {} @else {}` support.
 - `@for() {}` support for iteration.
-- `@include {}` support for partials. Partials can have a `{{ content }}` where block from `@include` will be rendered.
+- `@defer {}` support for partials. Partials can have a `{{ content }}` where block from `@defer` will be rendered.
 - `object["value"]` or `object.value` for accessing object values
 
 ## Usage
@@ -85,18 +85,18 @@ Iterates over array. `index` is added to the context:
 }
 ```
 
-### `@include`
+### `@defer`
 #### Includes other template by key.
 
 ```html
-@include (key) {}
+@defer (key) {}
 ```
 
 #### Render block in partial content slot
 
 `main`
 ```html
-@include (partial) {Hello}
+@defer (partial) {Hello}
 ```
 
 `partial`
@@ -107,11 +107,11 @@ Iterates over array. `index` is added to the context:
 #### Context can be send to partial.
 
 ```html
-@include (key; value="hello") {}
+@defer (key; value="hello") {}
 ```
 
 or for variables
 ```html
-@include (key; value=variable) {}
+@defer (key; value=variable) {}
 ```
 

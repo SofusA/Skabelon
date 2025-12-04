@@ -16,7 +16,7 @@ fn render_with_glob_and_relative_keys() {
         &main_path,
         r#"
         <h1>{{title}}</h1>
-        @include(partials/card.html) {<p>{{body}}</p>}
+        @defer(partials/card.html) {<p>{{body}}</p>}
     "#,
     )
     .unwrap();

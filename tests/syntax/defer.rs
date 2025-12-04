@@ -3,7 +3,7 @@ use skabelon::Templates;
 
 #[test]
 fn partial() {
-    let parent = "@include(partial) {} @if(true) {<span>World</span>}";
+    let parent = "@defer(partial) {} @if(true) {<span>World</span>}";
     let partial = "<span>Hello</span>";
 
     let mut templates = Templates::new();
@@ -19,7 +19,7 @@ fn partial() {
 
 #[test]
 fn partial_no_block() {
-    let parent = "@include(partial) @if(true) {<span>World</span>}";
+    let parent = "@defer(partial) @if(true) {<span>World</span>}";
     let partial = "<span>Hello</span>";
 
     let mut templates = Templates::new();
@@ -35,7 +35,7 @@ fn partial_no_block() {
 
 #[test]
 fn partial_block() {
-    let parent = "@include(partial) {Hello World}";
+    let parent = "@defer(partial) {Hello World}";
     let partial = "<div>{{ content }}</div>";
 
     let mut templates = Templates::new();
@@ -52,7 +52,7 @@ fn partial_block() {
 #[test]
 fn partial_separated_context() {
     let parent =
-        "{{value}}{{parent_value}} @include(partial; value='hello') {Hello {{parent_value}}}";
+        "{{value}}{{parent_value}} @defer(partial; value='hello') {Hello {{parent_value}}}";
     let partial = "{{value}} {{ content }}{{parent_value}}";
 
     let mut templates = Templates::new();
@@ -70,7 +70,7 @@ fn partial_separated_context() {
 
 #[test]
 fn partial_with_context() {
-    let parent = "@include(partial; partial_var=\"partial\") {<span>{{parent_var}}</span>}";
+    let parent = "@defer(partial; partial_var=\"partial\") {<span>{{parent_var}}</span>}";
     let partial = "<div>{{partial_var}} {{ content }}</div>";
 
     let mut templates = Templates::new();
@@ -88,7 +88,7 @@ fn partial_with_context() {
 
 #[test]
 fn partial_with_context_2() {
-    let parent = "@include(partial; show=true) {}";
+    let parent = "@defer(partial; show=true) {}";
     let partial = "@if(show) {hello world}";
 
     let mut templates = Templates::new();
@@ -104,7 +104,7 @@ fn partial_with_context_2() {
 
 #[test]
 fn partial_with_context_3() {
-    let parent = r#"@include(partial; variable=1) {}"#;
+    let parent = r#"@defer(partial; variable=1) {}"#;
     let partial = "{{variable}}";
 
     let mut templates = Templates::new();
@@ -120,7 +120,7 @@ fn partial_with_context_3() {
 
 #[test]
 fn partial_with_multi_context() {
-    let parent = "@include(partial; variable1=\"hello\" variable2=\"world\") {}";
+    let parent = "@defer(partial; variable1=\"hello\" variable2=\"world\") {}";
     let partial = "{{variable1}} {{variable2}}";
 
     let mut templates = Templates::new();
@@ -136,7 +136,7 @@ fn partial_with_multi_context() {
 
 #[test]
 fn partial_with_multi_context_2() {
-    let parent = "@include(partial; variable1=\"hello\"; variable2=\"world\") {}";
+    let parent = "@defer(partial; variable1=\"hello\"; variable2=\"world\") {}";
     let partial = "{{variable1}} {{variable2}}";
 
     let mut templates = Templates::new();
@@ -153,7 +153,7 @@ fn partial_with_multi_context_2() {
 #[test]
 fn partial_with_multi_line_context() {
     let parent = r#"
-@include(partial;
+@defer(partial;
     variable1="hello"
     variable2="world"
 ) {}"#;
@@ -173,7 +173,7 @@ fn partial_with_multi_line_context() {
 
 #[test]
 fn partial_with_variable_context() {
-    let parent = "@include(partial; partial_var=variable) {world}";
+    let parent = "@defer(partial; partial_var=variable) {world}";
     let partial = "{{partial_var}} world";
 
     let mut templates = Templates::new();

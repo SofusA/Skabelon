@@ -20,8 +20,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_include(&mut self) -> Node {
-        self.byte_offset += "@include".len();
+    fn parse_defer(&mut self) -> Node {
+        self.byte_offset += "@defer".len();
 
         self.skip_ws();
         self.expect_char('(');
@@ -70,11 +70,11 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            if self.starts_with("@include") {
+            if self.starts_with("@defer") {
                 if !text_buf.is_empty() {
                     nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
-                nodes.push(self.parse_include());
+                nodes.push(self.parse_defer());
                 continue;
             }
 

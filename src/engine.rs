@@ -135,7 +135,7 @@ pub fn render_nodes(
 
                     partial_stack.pop_scope();
                 } else {
-                    out.push_str(&format!("<!-- Missing include: {} -->", path));
+                    out.push_str(&format!("<!-- Missing defer: {} -->", path));
                 }
             }
 
