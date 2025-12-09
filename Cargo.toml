@@ -1,9 +1,10 @@
 [package]
 name = "skabelon"
-version = "0.1.17"
+version = "0.1.18"
 edition = "2024"
 description = "Simple templating engine for rust using angular syntax"
 license = "MIT"
+repository = "https://github.com/sofusa/skabelon"
 
 [dependencies]
 serde = "1"
