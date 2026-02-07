@@ -23,7 +23,7 @@ impl<'a> Parser<'a> {
     fn parse_defer(&mut self) -> Node {
         self.byte_offset += "@defer".len();
 
-        self.skip_ws();
+        self.skip_whitespace();
         self.expect_char('(');
 
         let inner = self.read_until_unbalanced(')', '(');
@@ -32,7 +32,7 @@ impl<'a> Parser<'a> {
         let local_ctx = parts.next().map(parse_kv_pairs).unwrap_or_default();
 
         // Optional block `{ ... }`
-        self.skip_ws();
+        self.skip_whitespace();
         let body = if self.peek_char() == Some('{') {
             self.byte_offset += 1; // consume '{'
             self.parse_nodes(Some('}'))
@@ -140,13 +140,13 @@ impl<'a> Parser<'a> {
     fn parse_if(&mut self) -> Node {
         self.byte_offset += "@if".len();
 
-        self.skip_ws();
+        self.skip_whitespace();
         self.expect_char('(');
 
         let expr = self.read_until_unbalanced(')', '(');
         let cond = parse_bool_expr(expr.trim());
 
-        self.skip_ws();
+        self.skip_whitespace();
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
 
@@ -155,21 +155,23 @@ impl<'a> Parser<'a> {
         let mut otherwise: Option<Vec<Node>> = None;
 
         loop {
-            self.skip_ws();
+            let save = self.byte_offset;
+
+            self.skip_whitespace();
 
             if self.starts_with("@else") {
                 self.byte_offset += "@else".len();
-                self.skip_ws();
+                self.skip_whitespace();
 
                 if self.starts_with("if") {
                     // '@else if (...) { ... }'
                     self.byte_offset += "if".len();
-                    self.skip_ws();
+                    self.skip_whitespace();
                     self.expect_char('(');
                     let expr = self.read_until_unbalanced(')', '(');
                     let cond = parse_bool_expr(expr.trim());
 
-                    self.skip_ws();
+                    self.skip_whitespace();
                     self.expect_char('{');
                     let body = self.parse_nodes(Some('}'));
 
@@ -177,13 +179,15 @@ impl<'a> Parser<'a> {
                     continue;
                 } else {
                     // '@else { ... }'
-                    self.skip_ws();
+                    self.skip_whitespace();
                     self.expect_char('{');
                     let else_body = self.parse_nodes(Some('}'));
                     otherwise = Some(else_body);
                     break;
                 }
             } else {
+                // No @else: restore so outer parser sees the whitespace as text
+                self.byte_offset = save;
                 break;
             }
         }
@@ -197,7 +201,7 @@ impl<'a> Parser<'a> {
     fn parse_for(&mut self) -> Node {
         self.byte_offset += "@for".len();
 
-        self.skip_ws();
+        self.skip_whitespace();
         self.expect_char('(');
 
         let for_expr = self.read_until_unbalanced(')', '(');
@@ -205,7 +209,7 @@ impl<'a> Parser<'a> {
 
         let container = parse_variable_path(container_str.trim());
 
-        self.skip_ws();
+        self.skip_whitespace();
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
 
@@ -243,7 +247,7 @@ impl<'a> Parser<'a> {
     }
 
     #[inline]
-    fn skip_ws(&mut self) {
+    fn skip_whitespace(&mut self) {
         while let Some(c) = self.peek_char() {
             if c.is_whitespace() {
                 self.byte_offset += c.len_utf8();
@@ -255,7 +259,7 @@ impl<'a> Parser<'a> {
 
     #[inline]
     fn expect_char(&mut self, expected: char) {
-        self.skip_ws();
+        self.skip_whitespace();
         if self.peek_char() == Some(expected) {
             self.byte_offset += expected.len_utf8();
         }

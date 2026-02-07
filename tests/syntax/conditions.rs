@@ -2,6 +2,22 @@ use serde_json::json;
 use skabelon::Templates;
 
 #[test]
+fn if_condition_with_space() {
+    let template_str = "@if(value) {hello} world";
+
+    let mut templates = Templates::new();
+    templates.load_str("template", template_str);
+
+    let ctx = json!({"value": true, "other": false});
+
+    let output = templates.render("template", &ctx);
+
+    let expected = "hello world";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn if_condition() {
     let template_str = "@if(value) {hello} @if(other) {world}";
 
@@ -112,7 +128,7 @@ fn if_else_if() {
 
 #[test]
 fn if_variable() {
-    let template_str = r#"@if(value1 == "A") {hello } @if(value3 == 1) {world}"#;
+    let template_str = r#"@if(value1 == "A") {hello} @if(value3 == 1) {world}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -129,7 +145,7 @@ fn if_variable() {
 #[test]
 fn if_variable_2() {
     let template_str =
-        r#"@if(value1 == "A") {hello } @if(value2 != "B") {world} @if(value3 < 10) {world}"#;
+        r#"@if(value1 == "A") {hello} @if(value2 != "B") {world} @if(value3 < 10) {world}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -161,7 +177,7 @@ fn if_variable_3() {
 
 #[test]
 fn if_variable_eq_string_literal() {
-    let template_str = r#"@if(value1 == "A") {hello } @if(value3 == 1) {world}"#;
+    let template_str = r#"@if(value1 == "A") {hello} @if(value3 == 1) {world}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -177,7 +193,7 @@ fn if_variable_eq_string_literal() {
 #[test]
 fn if_variable_ne_string_literal_and_lt_number_literal() {
     let template_str =
-        r#"@if(value1 == "A") {hello } @if(value2 != "B") {world} @if(value3 < 10) {world}"#;
+        r#"@if(value1 == "A") {hello} @if(value2 != "B") {world} @if(value3 < 10) {world}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -223,7 +239,7 @@ fn if_variable_ne_variable() {
 #[test]
 fn number_comparisons_literals() {
     let template_str =
-        r#"@if(num1 < 10) {a } @if(num2 > 5) {b } @if(num3 <= 3) {c } @if(num4 >= 7) {d}"#;
+        r#"@if(num1 < 10) {a} @if(num2 > 5) {b} @if(num3 <= 3) {c} @if(num4 >= 7) {d}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -238,7 +254,7 @@ fn number_comparisons_literals() {
 
 #[test]
 fn number_comparisons_variable_to_variable() {
-    let template_str = r#"@if(a < b) {x } @if(b > c) {y } @if(c <= d) {z } @if(d >= e) {w}"#;
+    let template_str = r#"@if(a < b) {x} @if(b > c) {y} @if(c <= d) {z} @if(d >= e) {w}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -253,7 +269,7 @@ fn number_comparisons_variable_to_variable() {
 
 #[test]
 fn string_ordering() {
-    let template_str = r#"@if(val1 < val2) {l } @if(val2 > val1) {g } @if(val1 <= val1) {le } @if(val2 >= val2) {ge}"#;
+    let template_str = r#"@if(val1 < val2) {l} @if(val2 > val1) {g} @if(val1 <= val1) {le} @if(val2 >= val2) {ge}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -269,7 +285,7 @@ fn string_ordering() {
 #[test]
 fn boolean_literals_and_variables() {
     let template_str =
-        r#"@if(flag1 == true) {T1 } @if(flag2 == false) {T2 } @if(flag3 != true) {T3}"#;
+        r#"@if(flag1 == true) {T1} @if(flag2 == false) {T2} @if(flag3 != true) {T3}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -284,7 +300,7 @@ fn boolean_literals_and_variables() {
 
 #[test]
 fn mixed_types_equality() {
-    let template_str = r#"@if(str1 == "10") {S } @if(num1 == 10) {N } @if(str1 != num1) {M}"#;
+    let template_str = r#"@if(str1 == "10") {S} @if(num1 == 10) {N} @if(str1 != num1) {M}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -374,7 +390,7 @@ fn not_and_or_combo() {
 
 #[test]
 fn variable_vs_literal_number_edge() {
-    let template_str = r#"@if(n == 0) {z } @if(n != 0) {nz } @if(n > -1) {gt } @if(n >= 0) {ge}"#;
+    let template_str = r#"@if(n == 0) {z} @if(n != 0) {nz} @if(n > -1) {gt} @if(n >= 0) {ge}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -389,7 +405,7 @@ fn variable_vs_literal_number_edge() {
 
 #[test]
 fn variable_vs_variable_booleans() {
-    let template_str = r#"@if(a == b) {eq } @if(a != b) {ne}"#;
+    let template_str = r#"@if(a == b) {eq} @if(a != b) {ne}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -398,13 +414,13 @@ fn variable_vs_variable_booleans() {
 
     let output = templates.render("template", &ctx);
 
-    let expected = "eq ";
+    let expected = "eq";
     assert_eq!(output, expected);
 }
 
 #[test]
 fn mixed_numeric_float_int() {
-    let template_str = r#"@if(f == 1.1) {float } @if(i == 1) {int } @if(f == i) {match}"#;
+    let template_str = r#"@if(f == 1.1) {float} @if(i == 1) {int} @if(f == i) {match}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -413,13 +429,13 @@ fn mixed_numeric_float_int() {
 
     let output = templates.render("template", &ctx);
 
-    let expected = "float int ";
+    let expected = "float int";
     assert_eq!(output, expected);
 }
 
 #[test]
 fn string_equality_variable_to_literal_quotes() {
-    let template_str = r#"@if(name == "Alice") {hi } @if(name != "Bob") {not Bob}"#;
+    let template_str = r#"@if(name == "Alice") {hi} @if(name != "Bob") {not Bob}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);
@@ -434,7 +450,7 @@ fn string_equality_variable_to_literal_quotes() {
 
 #[test]
 fn if_objects() {
-    let template_str = r#"@if(object.value1 == "A") {hello } @if(object.value2 != "A") {world}"#;
+    let template_str = r#"@if(object.value1 == "A") {hello} @if(object.value2 != "A") {world}"#;
 
     let mut templates = Templates::new();
     templates.load_str("template", template_str);

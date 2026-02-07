@@ -25,6 +25,40 @@ fn for_loops() {
 }
 
 #[test]
+fn for_loop_with_space() {
+    let template_str = "@for(item in items) {{{item}}} hello";
+
+    let mut templates = Templates::new();
+    templates.load_str("test", template_str);
+
+    let arr = ["A", "B", "C"];
+    let ctx = json!({"items": arr});
+
+    let output = templates.render("test", &ctx);
+
+    let expected = "ABC hello";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn empty_for_loop() {
+    let template_str = "@for(item in items) {{{item}}} hello";
+
+    let mut templates = Templates::new();
+    templates.load_str("test", template_str);
+
+    let arr: Vec<String> = vec![];
+    let ctx = json!({"items": arr});
+
+    let output = templates.render("test", &ctx);
+
+    let expected = "hello";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn index() {
     let template_str = "@for(item in items) {<span>{{index}}: {{item}}</span>}";
 

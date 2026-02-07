@@ -36,15 +36,14 @@ fn support_emoji() {
 }
 
 #[test]
-fn whites_space_test() {
+fn white_space_test() {
     let template_str = r#"
 <h1>Testing template</h1>
 
 <h2>If statements</h2>
 @if (true) {
   <span>hello</span>
-}
-"#;
+}"#;
 
     let expected = r#"
 <h1>Testing template</h1>

@@ -42,6 +42,15 @@ impl<'a> ContextStack<'a> {
     }
 }
 
+fn trim_single_trailing_space(out: &mut String) -> bool {
+    if out.ends_with(' ') {
+        out.pop();
+        true
+    } else {
+        false
+    }
+}
+
 pub fn render_nodes(
     nodes: &[Node],
     ctx_stack: &mut ContextStack,
@@ -49,18 +58,48 @@ pub fn render_nodes(
     content_html: Option<&str>,
 ) -> String {
     let mut out = String::new();
+    let mut suppress_one_leading_space = false;
 
     for n in nodes {
         match n {
-            Node::Text(s) => out.push_str(s),
+            Node::Text(s) => {
+                if suppress_one_leading_space {
+                    if let Some(rest) = s.strip_prefix(' ') {
+                        out.push_str(rest);
+                    } else {
+                        out.push_str(s);
+                    }
+                    // Only suppress once
+                    suppress_one_leading_space = false;
+                } else {
+                    out.push_str(s);
+                }
+            }
 
             Node::VariableBlock(path) => {
                 if path.len() == 1 && path[0] == "__CONTENT__" {
                     if let Some(html) = content_html {
-                        out.push_str(html);
+                        if !html.is_empty() {
+                            out.push_str(html);
+                            suppress_one_leading_space = false;
+                        } else {
+                            // Empty content acts like empty control: remove at most one adjacent space,
+                            // preferring the one before.
+                            let popped = trim_single_trailing_space(&mut out);
+                            if !popped {
+                                suppress_one_leading_space = true;
+                            }
+                        }
+                    } else {
+                        // No content provided
+                        let popped = trim_single_trailing_space(&mut out);
+                        if !popped {
+                            suppress_one_leading_space = true;
+                        }
                     }
                 } else if let Some(val) = resolve_path(path, ctx_stack) {
                     out.push_str(&value_to_string(val));
+                    suppress_one_leading_space = false;
                 }
             }
 
@@ -68,16 +107,27 @@ pub fn render_nodes(
                 conditions,
                 otherwise,
             }) => {
-                let mut rendered = false;
+                let mut rendered = String::new();
+                let mut taken = false;
+
                 for (cond, body) in conditions {
                     if evaluate_condition(cond, ctx_stack) {
-                        out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
-                        rendered = true;
+                        rendered = render_nodes(body, ctx_stack, templates, content_html);
+                        taken = true;
                         break;
                     }
                 }
-                if !rendered && let Some(body) = otherwise {
-                    out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
+                if !taken && let Some(body) = otherwise {
+                    rendered = render_nodes(body, ctx_stack, templates, content_html);
+                }
+
+                if rendered.is_empty() {
+                    // Remove at most one adjacent space, preferring the one before.
+                    let popped = trim_single_trailing_space(&mut out);
+                    suppress_one_leading_space = !popped;
+                } else {
+                    out.push_str(&rendered);
+                    suppress_one_leading_space = false;
                 }
             }
 
@@ -86,18 +136,28 @@ pub fn render_nodes(
                 container,
                 body,
             }) => {
+                let before = out.len();
+
                 let items_opt = resolve_path(container, ctx_stack)
                     .and_then(|v| v.as_array())
                     .map(|a| a.to_vec());
 
                 if let Some(items) = items_opt {
                     ctx_stack.push_scope();
-                    for item in items.into_iter().enumerate() {
-                        ctx_stack.set(value.clone(), item.1);
-                        ctx_stack.set("index".into(), Value::from(item.0));
+                    for (i, item) in items.into_iter().enumerate() {
+                        ctx_stack.set(value.clone(), item);
+                        ctx_stack.set("index".into(), Value::from(i));
                         out.push_str(&render_nodes(body, ctx_stack, templates, content_html));
                     }
                     ctx_stack.pop_scope();
+                }
+
+                let emitted_any = out.len() > before;
+                if !emitted_any {
+                    let popped = trim_single_trailing_space(&mut out);
+                    suppress_one_leading_space = !popped;
+                } else {
+                    suppress_one_leading_space = false;
                 }
             }
 
@@ -131,17 +191,34 @@ pub fn render_nodes(
                         templates,
                         Some(&parent_rendered_content),
                     );
-                    out.push_str(&rendered);
+
+                    if rendered.is_empty() {
+                        let popped = trim_single_trailing_space(&mut out);
+                        suppress_one_leading_space = !popped;
+                    } else {
+                        out.push_str(&rendered);
+                        suppress_one_leading_space = false;
+                    }
 
                     partial_stack.pop_scope();
                 } else {
                     out.push_str(&format!("<!-- Missing defer: {} -->", path));
+                    suppress_one_leading_space = false;
                 }
             }
 
             Node::ContentPlaceholder => {
                 if let Some(html) = content_html {
-                    out.push_str(html);
+                    if !html.is_empty() {
+                        out.push_str(html);
+                        suppress_one_leading_space = false;
+                    } else {
+                        let popped = trim_single_trailing_space(&mut out);
+                        suppress_one_leading_space = !popped;
+                    }
+                } else {
+                    let popped = trim_single_trailing_space(&mut out);
+                    suppress_one_leading_space = !popped;
                 }
             }
         }
