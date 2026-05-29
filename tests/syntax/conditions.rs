@@ -34,6 +34,22 @@ fn if_condition() {
 }
 
 #[test]
+fn empty_string_is_false() {
+    let template_str = "@if(value) { hello }";
+
+    let mut templates = Templates::new();
+    templates.load_str("template", template_str);
+
+    let ctx = json!({"value": ""});
+
+    let output = templates.render("template", &ctx);
+
+    let expected = "";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn and() {
     let template_str = "@if(value1 && value2) {hello} @if(value1 and value3) {world}";
 

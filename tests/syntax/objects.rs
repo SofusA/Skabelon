@@ -49,6 +49,23 @@ fn none_objects_values_are_false() {
 }
 
 #[test]
+fn objects_empty_string_values_are_false() {
+    let template = r#"@if(object["value"]) {Hello World}"#;
+
+    let mut templates = Templates::new();
+    templates.load_str("template", template);
+
+    let object = json!({"value": ""});
+    let ctx = json!({"object": object});
+
+    let output = templates.render("template", &ctx);
+
+    let expected = "";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn objects_values_are_truthy() {
     let template = "@if(object[\"value\"]) {{{object[\"value\"}}}";
 

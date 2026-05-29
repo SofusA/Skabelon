@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{Number, Value};
 
 use crate::nodes::{CompareOp, Condition, ForLoop, If, Include, LocalValue, Node, Operand};
 
@@ -27,14 +27,17 @@ impl<'a> Parser<'a> {
         self.expect_char('(');
 
         let inner = self.read_until_unbalanced(')', '(');
-        let mut parts = inner.splitn(2, ';').map(|s| s.trim());
-        let path = parts.next().unwrap_or("").to_string();
-        let local_ctx = parts.next().map(parse_kv_pairs).unwrap_or_default();
+        let split_at = find_top_level_char(&inner, ';');
+        let path = split_at
+            .map(|i| inner[..i].trim().to_string())
+            .unwrap_or_else(|| inner.trim().to_string());
+        let local_ctx = split_at
+            .map(|i| parse_kv_pairs(&inner[i + 1..]))
+            .unwrap_or_default();
 
-        // Optional block `{ ... }`
         self.skip_whitespace();
         let body = if self.peek_char() == Some('{') {
-            self.byte_offset += 1; // consume '{'
+            self.byte_offset += 1;
             self.parse_nodes(Some('}'))
         } else {
             Vec::new()
@@ -58,7 +61,7 @@ impl<'a> Parser<'a> {
                 if !text_buf.is_empty() {
                     nodes.push(Node::Text(std::mem::take(&mut text_buf)));
                 }
-                self.byte_offset += end.len_utf8(); // consume end
+                self.byte_offset += end.len_utf8();
                 break;
             }
 
@@ -114,22 +117,22 @@ impl<'a> Parser<'a> {
         if !text_buf.is_empty() {
             nodes.push(Node::Text(text_buf));
         }
+
         nodes
     }
 
     fn parse_variable(&mut self) -> Vec<String> {
-        self.byte_offset += 2; // '{{' are ASCII, 2 bytes
+        self.byte_offset += 2;
         let start = self.byte_offset;
 
         while !self.eof() {
             if self.starts_with("}}") {
                 let expr = self.src[start..self.byte_offset].trim();
-                self.byte_offset += 2; // consume '}}'
-                let trimmed = expr.trim();
-                if trimmed == "content" {
+                self.byte_offset += 2;
+                if expr == "content" {
                     return vec!["__CONTENT__".to_string()];
                 }
-                return parse_variable_path(trimmed);
+                return parse_variable_path(expr);
             }
             self.advance_one();
         }
@@ -150,8 +153,7 @@ impl<'a> Parser<'a> {
         self.expect_char('{');
         let body = self.parse_nodes(Some('}'));
 
-        let mut conditions = Vec::new();
-        conditions.push((cond, body));
+        let mut conditions = vec![(cond, body)];
         let mut otherwise: Option<Vec<Node>> = None;
 
         loop {
@@ -164,7 +166,6 @@ impl<'a> Parser<'a> {
                 self.skip_whitespace();
 
                 if self.starts_with("if") {
-                    // '@else if (...) { ... }'
                     self.byte_offset += "if".len();
                     self.skip_whitespace();
                     self.expect_char('(');
@@ -177,19 +178,16 @@ impl<'a> Parser<'a> {
 
                     conditions.push((cond, body));
                     continue;
-                } else {
-                    // '@else { ... }'
-                    self.skip_whitespace();
-                    self.expect_char('{');
-                    let else_body = self.parse_nodes(Some('}'));
-                    otherwise = Some(else_body);
-                    break;
                 }
-            } else {
-                // No @else: restore so outer parser sees the whitespace as text
-                self.byte_offset = save;
+
+                self.skip_whitespace();
+                self.expect_char('{');
+                otherwise = Some(self.parse_nodes(Some('}')));
                 break;
             }
+
+            self.byte_offset = save;
+            break;
         }
 
         Node::If(If {
@@ -206,7 +204,6 @@ impl<'a> Parser<'a> {
 
         let for_expr = self.read_until_unbalanced(')', '(');
         let (value, container_str) = parse_for_expression(&for_expr);
-
         let container = parse_variable_path(container_str.trim());
 
         self.skip_whitespace();
@@ -222,22 +219,41 @@ impl<'a> Parser<'a> {
 
     fn read_until_unbalanced(&mut self, end: char, start_pair: char) -> String {
         let start_position = self.byte_offset;
-        let mut depth = 0;
+        let mut depth = 0usize;
+        let mut quote: Option<char> = None;
+        let mut escaped = false;
 
-        let iter = self.src[self.byte_offset..].char_indices();
-        for (i, c) in iter {
+        for (i, c) in self.src[self.byte_offset..].char_indices() {
+            if let Some(q) = quote {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+                if c == '\\' {
+                    escaped = true;
+                    continue;
+                }
+                if c == q {
+                    quote = None;
+                }
+                continue;
+            }
+
+            if c == '"' || c == '\'' {
+                quote = Some(c);
+                continue;
+            }
+
             if c == start_pair {
                 depth += 1;
             } else if c == end {
                 if depth == 0 {
                     let end_byte = self.byte_offset + i;
                     let s = self.src[start_position..end_byte].to_string();
-                    // consume the end char
                     self.byte_offset = end_byte + end.len_utf8();
                     return s;
-                } else {
-                    depth -= 1;
                 }
+                depth -= 1;
             }
         }
 
@@ -290,91 +306,267 @@ impl<'a> Parser<'a> {
 
 fn parse_for_expression(expr: &str) -> (String, String) {
     let trimmed = expr.trim();
-    let mut parts = trimmed.splitn(2, " in ");
-    let value = parts.next().unwrap_or("").trim().to_string();
-    let container = parts.next().unwrap_or("").trim().to_string();
-    (value, container)
+
+    if let Some(i) = find_top_level_keyword(trimmed, "in") {
+        let value = trimmed[..i].trim().to_string();
+        let container = trimmed[i + "in".len()..].trim().to_string();
+        return (value, container);
+    }
+
+    (trimmed.to_string(), String::new())
 }
 
 fn parse_kv_pairs(s: &str) -> Vec<(String, LocalValue)> {
-    let normalized = s.replace(';', " ");
-    let tokens = normalized.split_whitespace();
+    let mut pairs = Vec::new();
+    let mut i = 0;
 
-    tokens
-        .filter_map(|pair| {
-            let mut kv = pair.splitn(2, '=').map(|x| x.trim());
-            let k = kv.next()?;
-            let v = kv.next()?;
+    while i < s.len() {
+        i = skip_kv_separators(s, i);
 
-            if (v.starts_with('"') && v.ends_with('"'))
-                || (v.starts_with('\'') && v.ends_with('\''))
-            {
-                let inner = &v[1..v.len() - 1];
-                return Some((
-                    k.to_string(),
-                    LocalValue::Literal(Value::String(inner.to_string())),
-                ));
+        if i >= s.len() {
+            break;
+        }
+
+        let key_start = i;
+
+        while i < s.len() {
+            let ch = char_at(s, i).unwrap();
+            if ch == '=' || ch.is_whitespace() || ch == ';' || ch == ',' {
+                break;
+            }
+            i += ch.len_utf8();
+        }
+
+        let key = s[key_start..i].trim();
+
+        i = skip_spaces(s, i);
+
+        if key.is_empty() || char_at(s, i) != Some('=') {
+            while i < s.len() {
+                let ch = char_at(s, i).unwrap();
+                i += ch.len_utf8();
+                if ch.is_whitespace() || ch == ';' || ch == ',' {
+                    break;
+                }
+            }
+            continue;
+        }
+
+        i += 1;
+        i = skip_spaces(s, i);
+
+        let (value, next_i) = read_kv_value(s, i);
+        i = next_i;
+
+        pairs.push((key.to_string(), parse_local_value(value.trim())));
+    }
+
+    pairs
+}
+
+fn parse_local_value(v: &str) -> LocalValue {
+    if let Some(s) = unquote(v) {
+        return LocalValue::Literal(Value::String(s));
+    }
+
+    if v == "true" {
+        return LocalValue::Literal(Value::Bool(true));
+    }
+
+    if v == "false" {
+        return LocalValue::Literal(Value::Bool(false));
+    }
+
+    if v == "null" {
+        return LocalValue::Literal(Value::Null);
+    }
+
+    if let Ok(i) = v.parse::<i64>() {
+        return LocalValue::Literal(Value::Number(i.into()));
+    }
+
+    if let Ok(f) = v.parse::<f64>()
+        && let Some(n) = Number::from_f64(f)
+    {
+        return LocalValue::Literal(Value::Number(n));
+    }
+
+    LocalValue::Path(parse_variable_path(v))
+}
+
+fn read_kv_value(s: &str, mut i: usize) -> (&str, usize) {
+    let start = i;
+
+    if let Some(q @ ('"' | '\'')) = char_at(s, i) {
+        i += q.len_utf8();
+        let mut escaped = false;
+
+        while i < s.len() {
+            let ch = char_at(s, i).unwrap();
+            i += ch.len_utf8();
+
+            if escaped {
+                escaped = false;
+                continue;
             }
 
-            if v == "true" {
-                return Some((k.to_string(), LocalValue::Literal(Value::Bool(true))));
+            if ch == '\\' {
+                escaped = true;
+                continue;
             }
 
-            if v == "false" {
-                return Some((k.to_string(), LocalValue::Literal(Value::Bool(false))));
+            if ch == q {
+                break;
+            }
+        }
+
+        return (&s[start..i], i);
+    }
+
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    let mut bracket_depth = 0usize;
+    let mut paren_depth = 0usize;
+
+    while i < s.len() {
+        let ch = char_at(s, i).unwrap();
+
+        if let Some(q) = quote {
+            i += ch.len_utf8();
+
+            if escaped {
+                escaped = false;
+                continue;
             }
 
-            if v == "null" {
-                return Some((k.to_string(), LocalValue::Literal(Value::Null)));
+            if ch == '\\' {
+                escaped = true;
+                continue;
             }
 
-            if let Ok(i) = v.parse::<i64>() {
-                return Some((k.to_string(), LocalValue::Literal(Value::Number(i.into()))));
+            if ch == q {
+                quote = None;
             }
 
-            if let Ok(f) = v.parse::<f64>() {
-                return Some((k.to_string(), LocalValue::Literal(serde_json::json!(f))));
-            }
+            continue;
+        }
 
-            Some((k.to_string(), LocalValue::Path(parse_variable_path(v))))
-        })
-        .collect()
+        match ch {
+            '"' | '\'' => {
+                quote = Some(ch);
+                i += ch.len_utf8();
+            }
+            '[' => {
+                bracket_depth += 1;
+                i += ch.len_utf8();
+            }
+            ']' => {
+                bracket_depth = bracket_depth.saturating_sub(1);
+                i += ch.len_utf8();
+            }
+            '(' => {
+                paren_depth += 1;
+                i += ch.len_utf8();
+            }
+            ')' => {
+                paren_depth = paren_depth.saturating_sub(1);
+                i += ch.len_utf8();
+            }
+            ';' | ',' if bracket_depth == 0 && paren_depth == 0 => break,
+            c if c.is_whitespace() && bracket_depth == 0 && paren_depth == 0 => break,
+            _ => i += ch.len_utf8(),
+        }
+    }
+
+    (&s[start..i], i)
+}
+
+fn skip_kv_separators(s: &str, mut i: usize) -> usize {
+    while i < s.len() {
+        let ch = char_at(s, i).unwrap();
+        if ch.is_whitespace() || ch == ';' || ch == ',' {
+            i += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+    i
+}
+
+fn skip_spaces(s: &str, mut i: usize) -> usize {
+    while i < s.len() {
+        let ch = char_at(s, i).unwrap();
+        if ch.is_whitespace() {
+            i += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+    i
 }
 
 fn parse_variable_path(expr: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut in_brackets = false;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
 
-    for c in expr.chars() {
+    for c in expr.trim().chars() {
+        if let Some(q) = quote {
+            if escaped {
+                current.push(c);
+                escaped = false;
+                continue;
+            }
+
+            if c == '\\' {
+                escaped = true;
+                continue;
+            }
+
+            if c == q {
+                quote = None;
+                continue;
+            }
+
+            current.push(c);
+            continue;
+        }
+
         match c {
+            '"' | '\'' if in_brackets => quote = Some(c),
             '[' => {
-                if !current.is_empty() {
-                    parts.push(current.clone());
+                if !current.trim().is_empty() {
+                    parts.push(current.trim().to_string());
                     current.clear();
                 }
                 in_brackets = true;
             }
             ']' => {
                 if in_brackets {
-                    parts.push(current.clone());
+                    if !current.trim().is_empty() {
+                        parts.push(current.trim().to_string());
+                    }
                     current.clear();
                     in_brackets = false;
                 }
             }
-            '"' | '\'' => continue,
             '.' if !in_brackets => {
-                if !current.is_empty() {
-                    parts.push(current.clone());
+                if !current.trim().is_empty() {
+                    parts.push(current.trim().to_string());
                     current.clear();
                 }
             }
+            c if c.is_whitespace() && !in_brackets => {}
             _ => current.push(c),
         }
     }
-    if !current.is_empty() {
-        parts.push(current);
+
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
     }
+
     parts
 }
 
@@ -394,91 +586,6 @@ enum Token {
     RParen,
 }
 
-fn parse_unary(cur: &mut Cursor) -> Condition {
-    match cur.peek() {
-        Some(Token::Not) => {
-            cur.next(); // consume '!'
-            let inner = parse_unary(cur); // right-associative
-            Condition::Not(Box::new(inner))
-        }
-        _ => parse_factor(cur),
-    }
-}
-
-fn tokenize_bool(s: &str) -> Vec<Token> {
-    let mut tokens = Vec::new();
-    let mut cur = String::new();
-
-    let push_cur = |cur: &mut String, tokens: &mut Vec<Token>| {
-        if cur.is_empty() {
-            return;
-        }
-        let w = cur.trim().to_string();
-        cur.clear();
-        match w.as_str() {
-            "and" | "&&" => tokens.push(Token::And),
-            "or" | "||" => tokens.push(Token::Or),
-            "not" => tokens.push(Token::Not),
-            _ => tokens.push(Token::Ident(w)),
-        }
-    };
-
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            '(' => {
-                push_cur(&mut cur, &mut tokens);
-                tokens.push(Token::LParen);
-            }
-            ')' => {
-                push_cur(&mut cur, &mut tokens);
-                tokens.push(Token::RParen);
-            }
-            '=' => {
-                push_cur(&mut cur, &mut tokens);
-                if chars.peek() == Some(&'=') {
-                    chars.next();
-                    tokens.push(Token::Eq);
-                }
-            }
-            '!' => {
-                push_cur(&mut cur, &mut tokens);
-                if chars.peek() == Some(&'=') {
-                    chars.next();
-                    tokens.push(Token::Ne);
-                } else {
-                    tokens.push(Token::Not);
-                }
-            }
-            '<' => {
-                push_cur(&mut cur, &mut tokens);
-                if chars.peek() == Some(&'=') {
-                    chars.next();
-                    tokens.push(Token::Le);
-                } else {
-                    tokens.push(Token::Lt);
-                }
-            }
-            '>' => {
-                push_cur(&mut cur, &mut tokens);
-                if chars.peek() == Some(&'=') {
-                    chars.next();
-                    tokens.push(Token::Ge);
-                } else {
-                    tokens.push(Token::Gt);
-                }
-            }
-
-            c if c.is_whitespace() => {
-                push_cur(&mut cur, &mut tokens);
-            }
-            _ => cur.push(c),
-        }
-    }
-    push_cur(&mut cur, &mut tokens);
-    tokens
-}
-
 struct Cursor {
     tokens: Vec<Token>,
     position: usize,
@@ -491,9 +598,11 @@ impl Cursor {
             position: 0,
         }
     }
+
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.position)
     }
+
     fn next(&mut self) -> Option<Token> {
         let t = self.tokens.get(self.position).cloned();
         if t.is_some() {
@@ -509,14 +618,132 @@ fn parse_bool_expr(s: &str) -> Condition {
     parse_expr(&mut cur)
 }
 
+fn tokenize_bool(s: &str) -> Vec<Token> {
+    let mut tokens = Vec::new();
+    let mut cur = String::new();
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '"' | '\'' => {
+                cur.push(c);
+
+                let quote = c;
+                let mut escaped = false;
+
+                for ch in chars.by_ref() {
+                    cur.push(ch);
+
+                    if escaped {
+                        escaped = false;
+                        continue;
+                    }
+
+                    if ch == '\\' {
+                        escaped = true;
+                        continue;
+                    }
+
+                    if ch == quote {
+                        break;
+                    }
+                }
+            }
+            '(' => {
+                push_ident_token(&mut cur, &mut tokens);
+                tokens.push(Token::LParen);
+            }
+            ')' => {
+                push_ident_token(&mut cur, &mut tokens);
+                tokens.push(Token::RParen);
+            }
+            '=' => {
+                if chars.peek() == Some(&'=') {
+                    push_ident_token(&mut cur, &mut tokens);
+                    chars.next();
+                    tokens.push(Token::Eq);
+                } else {
+                    cur.push(c);
+                }
+            }
+            '!' => {
+                push_ident_token(&mut cur, &mut tokens);
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::Ne);
+                } else {
+                    tokens.push(Token::Not);
+                }
+            }
+            '<' => {
+                push_ident_token(&mut cur, &mut tokens);
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::Le);
+                } else {
+                    tokens.push(Token::Lt);
+                }
+            }
+            '>' => {
+                push_ident_token(&mut cur, &mut tokens);
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::Ge);
+                } else {
+                    tokens.push(Token::Gt);
+                }
+            }
+            '&' => {
+                push_ident_token(&mut cur, &mut tokens);
+                if chars.peek() == Some(&'&') {
+                    chars.next();
+                    tokens.push(Token::And);
+                } else {
+                    cur.push(c);
+                }
+            }
+            '|' => {
+                push_ident_token(&mut cur, &mut tokens);
+                if chars.peek() == Some(&'|') {
+                    chars.next();
+                    tokens.push(Token::Or);
+                } else {
+                    cur.push(c);
+                }
+            }
+            c if c.is_whitespace() => push_ident_token(&mut cur, &mut tokens),
+            _ => cur.push(c),
+        }
+    }
+
+    push_ident_token(&mut cur, &mut tokens);
+    tokens
+}
+
+fn push_ident_token(cur: &mut String, tokens: &mut Vec<Token>) {
+    if cur.is_empty() {
+        return;
+    }
+
+    let w = cur.trim().to_string();
+    cur.clear();
+
+    match w.as_str() {
+        "and" => tokens.push(Token::And),
+        "or" => tokens.push(Token::Or),
+        "not" => tokens.push(Token::Not),
+        _ if !w.is_empty() => tokens.push(Token::Ident(w)),
+        _ => {}
+    }
+}
+
 fn parse_expr(cur: &mut Cursor) -> Condition {
     let left = parse_term(cur);
     let mut parts = vec![left];
 
     while let Some(Token::Or) = cur.peek() {
         cur.next();
-        let rhs = parse_term(cur);
-        parts.push(rhs);
+        parts.push(parse_term(cur));
     }
 
     if parts.len() == 1 {
@@ -532,8 +759,7 @@ fn parse_term(cur: &mut Cursor) -> Condition {
 
     while let Some(Token::And) = cur.peek() {
         cur.next();
-        let rhs = parse_unary(cur);
-        parts.push(rhs);
+        parts.push(parse_unary(cur));
     }
 
     if parts.len() == 1 {
@@ -543,13 +769,23 @@ fn parse_term(cur: &mut Cursor) -> Condition {
     }
 }
 
+fn parse_unary(cur: &mut Cursor) -> Condition {
+    match cur.peek() {
+        Some(Token::Not) => {
+            cur.next();
+            Condition::Not(Box::new(parse_unary(cur)))
+        }
+        _ => parse_factor(cur),
+    }
+}
+
 fn parse_factor(cur: &mut Cursor) -> Condition {
     match cur.peek() {
         Some(Token::LParen) => {
-            cur.next(); // '('
+            cur.next();
             let inner = parse_expr(cur);
             if let Some(Token::RParen) = cur.peek() {
-                cur.next(); // ')'
+                cur.next();
             }
             inner
         }
@@ -559,15 +795,25 @@ fn parse_factor(cur: &mut Cursor) -> Condition {
             } else {
                 String::new()
             };
+
             if let Some(op_tok) = cur.peek()
                 && let Some(op) = parse_compare_op(op_tok)
             {
-                cur.next(); // consume operator
+                cur.next();
                 let right = parse_operand(cur.next());
-                let left = Operand::Path(parse_variable_path(&left_ident));
+                let left = operand_from_expr(&left_ident);
                 return Condition::Compare { left, op, right };
             }
-            Condition::Path(parse_variable_path(&left_ident))
+
+            if is_literal_expr(&left_ident) {
+                Condition::Literal(
+                    parse_literal(Some(Token::Ident(left_ident)))
+                        .as_bool()
+                        .unwrap_or_default(),
+                )
+            } else {
+                Condition::Path(parse_variable_path(&left_ident))
+            }
         }
         _ => Condition::Literal(false),
     }
@@ -575,22 +821,26 @@ fn parse_factor(cur: &mut Cursor) -> Condition {
 
 fn parse_operand(tok: Option<Token>) -> Operand {
     match tok {
-        Some(Token::Ident(s)) => {
-            let t = s.as_str();
-            let is_quoted = (t.starts_with('"') && t.ends_with('"'))
-                || (t.starts_with('\'') && t.ends_with('\''));
-            let is_bool = t == "true" || t == "false";
-            let is_int = t.parse::<i64>().is_ok();
-            let is_float = t.parse::<f64>().is_ok();
-
-            if is_quoted || is_bool || is_int || is_float {
-                Operand::Literal(parse_literal(Some(Token::Ident(s))))
-            } else {
-                Operand::Path(parse_variable_path(&s))
-            }
-        }
+        Some(Token::Ident(s)) => operand_from_expr(&s),
         other => Operand::Literal(parse_literal(other)),
     }
+}
+
+fn operand_from_expr(s: &str) -> Operand {
+    if is_literal_expr(s) {
+        Operand::Literal(parse_literal(Some(Token::Ident(s.to_string()))))
+    } else {
+        Operand::Path(parse_variable_path(s))
+    }
+}
+
+fn is_literal_expr(s: &str) -> bool {
+    s == "true"
+        || s == "false"
+        || s == "null"
+        || unquote(s).is_some()
+        || s.parse::<i64>().is_ok()
+        || s.parse::<f64>().is_ok()
 }
 
 fn parse_compare_op(tok: &Token) -> Option<CompareOp> {
@@ -612,18 +862,178 @@ fn parse_literal(tok: Option<Token>) -> Value {
                 Value::Bool(true)
             } else if s == "false" {
                 Value::Bool(false)
+            } else if s == "null" {
+                Value::Null
             } else if let Ok(i) = s.parse::<i64>() {
                 Value::Number(i.into())
             } else if let Ok(f) = s.parse::<f64>() {
-                serde_json::json!(f)
-            } else if (s.starts_with('"') && s.ends_with('"'))
-                || (s.starts_with('\'') && s.ends_with('\''))
-            {
-                Value::String(s[1..s.len() - 1].to_string())
+                Number::from_f64(f)
+                    .map(Value::Number)
+                    .unwrap_or(Value::Null)
+            } else if let Some(unquoted) = unquote(&s) {
+                Value::String(unquoted)
             } else {
                 Value::String(s)
             }
         }
         _ => Value::Null,
     }
+}
+
+fn unquote(s: &str) -> Option<String> {
+    let mut chars = s.chars();
+    let quote = chars.next()?;
+
+    if quote != '"' && quote != '\'' {
+        return None;
+    }
+
+    if !s.ends_with(quote) || s.len() < quote.len_utf8() * 2 {
+        return None;
+    }
+
+    let inner = &s[quote.len_utf8()..s.len() - quote.len_utf8()];
+    let mut out = String::new();
+    let mut escaped = false;
+
+    for ch in inner.chars() {
+        if escaped {
+            match ch {
+                'n' => out.push('\n'),
+                'r' => out.push('\r'),
+                't' => out.push('\t'),
+                '\\' => out.push('\\'),
+                '"' => out.push('"'),
+                '\'' => out.push('\''),
+                other => out.push(other),
+            }
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else {
+            out.push(ch);
+        }
+    }
+
+    if escaped {
+        out.push('\\');
+    }
+
+    Some(out)
+}
+
+fn find_top_level_char(s: &str, target: char) -> Option<usize> {
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+
+    for (i, ch) in s.char_indices() {
+        if let Some(q) = quote {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+
+            if ch == q {
+                quote = None;
+            }
+
+            continue;
+        }
+
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            '{' => brace_depth += 1,
+            '}' => brace_depth = brace_depth.saturating_sub(1),
+            c if c == target && paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 => {
+                return Some(i);
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn find_top_level_keyword(s: &str, keyword: &str) -> Option<usize> {
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+
+    for (i, ch) in s.char_indices() {
+        if let Some(q) = quote {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+
+            if ch == q {
+                quote = None;
+            }
+
+            continue;
+        }
+
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            '{' => brace_depth += 1,
+            '}' => brace_depth = brace_depth.saturating_sub(1),
+            _ => {
+                if paren_depth == 0
+                    && bracket_depth == 0
+                    && brace_depth == 0
+                    && s[i..].starts_with(keyword)
+                    && is_keyword_boundary(s, i, keyword.len())
+                {
+                    return Some(i);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn is_keyword_boundary(s: &str, start: usize, len: usize) -> bool {
+    let before = if start == 0 {
+        None
+    } else {
+        s[..start].chars().next_back()
+    };
+
+    let after_index = start + len;
+    let after = if after_index >= s.len() {
+        None
+    } else {
+        s[after_index..].chars().next()
+    };
+
+    before.map(|c| c.is_whitespace()).unwrap_or(true)
+        && after.map(|c| c.is_whitespace()).unwrap_or(true)
+}
+
+fn char_at(s: &str, i: usize) -> Option<char> {
+    s.get(i..)?.chars().next()
 }

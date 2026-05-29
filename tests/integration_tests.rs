@@ -74,7 +74,7 @@ fn big_test() {
     templates.load_str("partial2.html", partial_2_template);
     templates.load_str("partial3.html", partial_3_template);
 
-    let object = json!({"true": true, "false": false, "number": 5, "string": "world", "none": None::<String>, "array": [1, 2, 3]});
+    let object = json!({"true": true, "false": false, "number": 5, "string": "world", "none": "", "array": [1, 2, 3]});
 
     let ctx = json!({"bool_true": true,"bool_false": false, "array": ["A", "B", "C"], "string": "hello", "object": object });
 

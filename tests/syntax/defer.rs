@@ -119,6 +119,22 @@ fn partial_with_context_3() {
 }
 
 #[test]
+fn partial_with_context_4() {
+    let parent = r#"@defer(partial; variable="hello world") {}"#;
+    let partial = "{{ variable }}";
+
+    let mut templates = Templates::new();
+    templates.load_str("parent", parent);
+    templates.load_str("partial", partial);
+
+    let output = templates.render("parent", Default::default());
+
+    let expected = "hello world";
+
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn partial_with_multi_context() {
     let parent = "@defer(partial; variable1=\"hello\" variable2=\"world\") {}";
     let partial = "{{variable1}} {{variable2}}";
