@@ -8,6 +8,7 @@ pub enum Node {
     If(If),
     Include(Include),
     ContentPlaceholder,
+    Error(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
